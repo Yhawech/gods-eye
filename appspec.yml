@@ -1,0 +1,23 @@
+version: 0.0
+os: linux
+files:
+  - source: /
+    destination: /opt/gods-eye/current
+file_exists_behavior: OVERWRITE
+hooks:
+  BeforeInstall:
+    - location: scripts/install_dependencies.sh
+      timeout: 900
+      runas: root
+  ApplicationStop:
+    - location: scripts/stop_app.sh
+      timeout: 180
+      runas: root
+  ApplicationStart:
+    - location: scripts/start_app.sh
+      timeout: 600
+      runas: root
+  ValidateService:
+    - location: scripts/validate_service.sh
+      timeout: 240
+      runas: root

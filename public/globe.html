@@ -1,0 +1,104 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GOD'S EYE - 3D Globe Companion</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/globe.css?v=20260830-gev1" />
+  </head>
+  <body>
+    <div id="scanlines" aria-hidden="true"></div>
+    <header id="topbar">
+      <a id="logo" href="/">GOD'S <span>EYE</span></a>
+      <div class="page-title">
+        <strong>3D Globe</strong>
+        <span>Photorealistic OSINT companion view</span>
+      </div>
+      <nav class="nav-actions" aria-label="Navigation">
+        <a class="hud-button" href="/">Dashboard</a>
+        <a class="hud-button" href="/v2.html">Threat Intel</a>
+        <a class="hud-button" href="/traffic.html">Live Traffic</a>
+      </nav>
+    </header>
+
+    <main class="globe-shell">
+      <section class="hero-panel">
+        <div>
+          <span class="eyebrow">God's Eye View Integration</span>
+          <h1>3D geospatial command view</h1>
+          <p>
+            This launches the open-source God's Eye View globe beside your GOD EYE intelligence dashboard.
+            Use it for aircraft, vessels, satellites, fires, cameras, terrain, and tactical map context.
+          </p>
+        </div>
+        <div class="launch-card">
+          <span id="globeStatus" class="status-pill">Checking</span>
+          <a id="openGlobe" class="hud-button primary" href="http://127.0.0.1:4174" target="_blank" rel="noreferrer">Open Globe Console</a>
+        </div>
+      </section>
+
+      <section class="grid">
+        <article class="panel">
+          <span class="eyebrow">Local Setup</span>
+          <h2>Run beside GOD EYE</h2>
+          <p>Main GOD EYE runs on port 4173. The 3D globe companion runs on port 4174. Use start:full after setup to launch both together.</p>
+          <div class="command-row">
+            <code>npm run setup:globe</code>
+            <button type="button" data-copy="npm run setup:globe">Copy</button>
+          </div>
+          <div class="command-row">
+            <code>npm run install:globe</code>
+            <button type="button" data-copy="npm run install:globe">Copy</button>
+          </div>
+          <div class="command-row">
+            <code>npm run start:globe</code>
+            <button type="button" data-copy="npm run start:globe">Copy</button>
+          </div>
+          <div class="command-row">
+            <code>npm run start:full</code>
+            <button type="button" data-copy="npm run start:full">Copy</button>
+          </div>
+        </article>
+
+        <article class="panel">
+          <span class="eyebrow">Keys</span>
+          <h2>Provider status</h2>
+          <div class="status-list">
+            <div><span>DeepSeek analyst engine</span><strong id="deepseekState">Checking</strong></div>
+            <div><span>Google Maps 3D tiles</span><strong id="googleState">Checking</strong></div>
+            <div><span>OpenSky aircraft</span><strong>Anonymous</strong></div>
+            <div><span>CelesTrak satellites</span><strong>Keyless</strong></div>
+            <div><span>USGS earthquakes</span><strong>Keyless</strong></div>
+          </div>
+        </article>
+
+        <article class="panel wide">
+          <span class="eyebrow">Companion Scope</span>
+          <h2>What this adds</h2>
+          <div class="feature-grid">
+            <div><strong>Photorealistic 3D globe</strong><span>Google Map Tiles and Cesium-based terrain view.</span></div>
+            <div><strong>Live contacts</strong><span>Aircraft, military ADS-B, vessels, satellites, and launch context.</span></div>
+            <div><strong>Environmental layers</strong><span>Earthquakes, active fires, weather context, and camera/source overlays.</span></div>
+            <div><strong>OSINT workflow</strong><span>Use the globe for visual context, then use GOD EYE v2 for DeepSeek reports and MongoDB storage.</span></div>
+          </div>
+        </article>
+      </section>
+
+      <section class="frame-panel">
+        <div class="frame-head">
+          <div>
+            <span class="eyebrow">Live Preview</span>
+            <h2>Globe companion</h2>
+          </div>
+          <button class="hud-button" id="reloadFrame" type="button">Reload</button>
+        </div>
+        <iframe id="globeFrame" title="God's Eye View globe preview" src="about:blank"></iframe>
+      </section>
+    </main>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="/globe.js?v=20260830-gev1" defer></script>
+  </body>
+</html>
+

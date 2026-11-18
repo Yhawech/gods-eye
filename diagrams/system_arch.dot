@@ -1,0 +1,29 @@
+digraph G {
+  graph [bgcolor="transparent", rankdir=LR, splines=ortho, nodesep=0.35, ranksep=0.55, pad=0.2];
+  node [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=15, color="#22D3EE", fillcolor="#141C2E", fontcolor="#E6EDF7", margin="0.22,0.12", penwidth=1.6];
+  edge [color="#334155", arrowsize=0.8, penwidth=1.6];
+
+  subgraph cluster_sources {
+    label="DATA SOURCES"; fontname="Segoe UI"; fontsize=16; fontcolor="#22D3EE"; color="#22D3EE"; style="rounded,filled"; fillcolor="#0F1626"; penwidth=1.4; margin=16;
+    s1 [label="Public OSINT Feeds\n(USGS, NASA EONET,\nNOAA/NWS, GDACS, GDELT)", color="#22D3EE"];
+    s2 [label="News & Source Pack\n(BBC, Al Jazeera, SCMP,\nThe War Zone, Bellingcat)"];
+    s3 [label="Cyber Threat Feeds\n(CISA KEV,\nabuse.ch URLhaus)"];
+    s4 [label="Aviation & Hazards\n(OpenSky, Airplanes.live,\nFEMA, Defense.gov)"];
+  }
+
+  subgraph cluster_core {
+    label="CORE PIPELINE"; fontname="Segoe UI"; fontsize=16; fontcolor="#2DD4BF"; color="#2DD4BF"; style="rounded,filled"; fillcolor="#0F1626"; penwidth=1.4; margin=16;
+    ingest [label="FastAPI Ingestion\n(port 4173)", color="#2DD4BF"];
+    process [label="Processing Engine\n\u2022 credibility scoring\n\u2022 duplicate merging\n\u2022 severity scoring", color="#2DD4BF"];
+    store [label="MongoDB Atlas\n(gods_eye)", color="#F59E0B", fillcolor="#1C1A10"];
+    deepseek [label="DeepSeek API\n\u2022 chatbot\n\u2022 report generation\n\u2022 analyst summaries", color="#8B5CF6", fillcolor="#191333", shape=box];
+    out [label="Intelligence Dashboard\n\u2022 interactive map\n\u2022 analytics\n\u2022 PDF reports\n\u2022 3D globe companion", color="#22D3EE", shape=box];
+  }
+
+  s1 -> ingest; s2 -> ingest; s3 -> ingest; s4 -> ingest;
+  ingest -> process;
+  process -> store;
+  store -> deepseek;
+  deepseek -> out;
+  process -> out [style=dashed, color="#334155"];
+}

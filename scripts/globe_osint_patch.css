@@ -1,0 +1,338 @@
+/* GOD EYE OSINT integration patch: readable menus and public-source helper panel. */
+select,
+select option,
+select optgroup,
+.pp-select,
+#cctv-camera-select,
+#scene-select {
+  background-color: rgba(6, 18, 26, 0.98) !important;
+  color: #ecfbff !important;
+  border-color: rgba(0, 212, 255, 0.36) !important;
+}
+
+select:focus,
+.pp-select:focus,
+#cctv-camera-select:focus,
+#scene-select:focus {
+  outline: 2px solid rgba(0, 212, 255, 0.72);
+  outline-offset: 2px;
+}
+
+#gods-eye-osint-panel {
+  position: fixed;
+  left: 24px;
+  bottom: 104px;
+  z-index: 158;
+  width: min(370px, calc(100vw - 48px));
+  max-height: min(560px, 58vh);
+  border: 1px solid rgba(0, 212, 255, 0.34);
+  border-radius: 10px;
+  background: rgba(4, 13, 20, 0.86);
+  box-shadow: 0 18px 46px rgba(0, 0, 0, 0.45), inset 0 0 20px rgba(0, 212, 255, 0.05);
+  color: #dff9ff;
+  font-family: 'JetBrains Mono', ui-monospace, monospace;
+  pointer-events: auto;
+  backdrop-filter: blur(18px);
+}
+
+#gods-eye-osint-panel.collapsed { width: 230px; }
+#gods-eye-osint-panel.collapsed .gods-eye-osint-body { display: none; }
+
+.gods-eye-osint-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 14px;
+  border-bottom: 1px solid rgba(0, 212, 255, 0.18);
+}
+
+.gods-eye-osint-head strong {
+  display: block;
+  color: #00e5ff;
+  font-size: 12px;
+  letter-spacing: 0.16em;
+}
+
+.gods-eye-osint-head span {
+  display: block;
+  margin-top: 3px;
+  color: rgba(224, 248, 255, 0.65);
+  font-size: 9px;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+}
+
+.gods-eye-osint-head button,
+.gods-eye-osint-toolbar button,
+.gods-eye-osint-wide-actions button,
+.gods-eye-osint-primary,
+.gods-eye-osint-row,
+.gods-eye-osint-link-row {
+  border: 1px solid rgba(0, 212, 255, 0.28);
+  border-radius: 6px;
+  background: rgba(9, 28, 39, 0.82);
+  color: #dff9ff;
+  font: 700 10px/1.2 'JetBrains Mono', ui-monospace, monospace;
+  letter-spacing: 0.08em;
+  cursor: pointer;
+}
+
+.gods-eye-osint-head button:hover,
+.gods-eye-osint-toolbar button:hover,
+.gods-eye-osint-wide-actions button:hover,
+.gods-eye-osint-primary:hover,
+.gods-eye-osint-row:hover,
+.gods-eye-osint-link-row:hover,
+.gods-eye-osint-head button:focus-visible,
+.gods-eye-osint-toolbar button:focus-visible,
+.gods-eye-osint-wide-actions button:focus-visible,
+.gods-eye-osint-primary:focus-visible,
+.gods-eye-osint-row:focus-visible,
+.gods-eye-osint-link-row:focus-visible {
+  border-color: rgba(255, 255, 255, 0.82);
+  color: #ffffff;
+  outline: none;
+}
+
+.gods-eye-osint-body {
+  display: grid;
+  gap: 10px;
+  max-height: calc(min(560px, 58vh) - 49px);
+  overflow-y: auto;
+  padding: 12px 14px 14px;
+}
+
+.gods-eye-osint-toolbar {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.gods-eye-osint-toolbar button,
+.gods-eye-osint-wide-actions button,
+.gods-eye-osint-primary {
+  min-height: 34px;
+  padding: 7px 8px;
+}
+
+.gods-eye-osint-wide-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 7px;
+}
+
+.gods-eye-osint-primary {
+  width: 100%;
+  background: rgba(0, 126, 152, 0.34);
+}
+
+.gods-eye-osint-section {
+  border-top: 1px solid rgba(0, 212, 255, 0.14);
+  padding-top: 8px;
+}
+
+.gods-eye-osint-section summary {
+  color: rgba(224, 248, 255, 0.78);
+  cursor: pointer;
+  font-size: 10px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.gods-eye-osint-list,
+.gods-eye-osint-brief-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.gods-eye-osint-row,
+.gods-eye-osint-link-row {
+  display: grid;
+  gap: 3px;
+  width: 100%;
+  padding: 8px 10px;
+  text-align: left;
+}
+
+.gods-eye-osint-row strong,
+.gods-eye-osint-link-row strong {
+  color: #ffffff;
+  font-size: 10px;
+}
+
+.gods-eye-osint-row span,
+.gods-eye-osint-link-row span {
+  color: rgba(195, 231, 242, 0.68);
+  font-size: 9px;
+  letter-spacing: 0.05em;
+}
+
+.gods-eye-osint-notes {
+  display: grid;
+  gap: 6px;
+  border-top: 1px solid rgba(0, 212, 255, 0.14);
+  padding-top: 9px;
+}
+
+.gods-eye-osint-notes div {
+  display: grid;
+  grid-template-columns: 78px minmax(0, 1fr);
+  gap: 8px;
+  color: rgba(222, 248, 255, 0.68);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.gods-eye-osint-notes strong { color: #78efff; }
+
+.gods-eye-osint-status,
+.gods-eye-osint-empty {
+  border: 1px solid rgba(0, 212, 255, 0.16);
+  border-radius: 6px;
+  background: rgba(0, 0, 0, 0.22);
+  color: rgba(227, 249, 255, 0.74);
+  font-size: 9px;
+  line-height: 1.45;
+  padding: 8px 10px;
+}
+
+@media (max-width: 760px) {
+  #gods-eye-osint-panel {
+    left: 12px;
+    right: 12px;
+    bottom: 88px;
+    width: auto;
+    max-height: 48vh;
+  }
+
+  .gods-eye-osint-wide-actions { grid-template-columns: 1fr; }
+}
+.gods-eye-osint-feed-section {
+  border-top: 1px solid rgba(255, 176, 0, 0.22);
+  padding-top: 8px;
+}
+
+.gods-eye-osint-feed-section summary {
+  color: #ffd36b;
+}
+
+.gods-eye-osint-feed-subtitle {
+  margin-top: 6px;
+  color: rgba(224, 248, 255, 0.56);
+  font-size: 9px;
+  line-height: 1.4;
+}
+
+.gods-eye-osint-feed-list {
+  display: grid;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.gods-eye-osint-feed-row {
+  display: grid;
+  gap: 4px;
+  width: 100%;
+  padding: 8px 10px;
+  border: 1px solid rgba(255, 176, 0, 0.24);
+  border-radius: 6px;
+  background: rgba(26, 25, 12, 0.72);
+  color: #ecfbff;
+  text-align: left;
+  cursor: pointer;
+}
+
+.gods-eye-osint-feed-row:hover,
+.gods-eye-osint-feed-row:focus-visible {
+  border-color: rgba(255, 211, 107, 0.9);
+  outline: none;
+}
+
+.gods-eye-osint-feed-row strong {
+  color: #ffffff;
+  font-size: 10px;
+  line-height: 1.35;
+}
+
+.gods-eye-osint-feed-row span {
+  color: rgba(255, 226, 157, 0.7);
+  font-size: 9px;
+  line-height: 1.3;
+}
+
+.gods-eye-osint-marker-details {
+  display: grid;
+  gap: 8px;
+  border: 1px solid rgba(255, 176, 0, 0.34);
+  border-radius: 7px;
+  background: rgba(28, 24, 11, 0.62);
+  padding: 10px;
+}
+
+.gods-eye-osint-marker-details-title {
+  color: #ffd36b;
+  font-size: 9px;
+  font-weight: 800;
+  letter-spacing: 0.14em;
+}
+
+.gods-eye-osint-marker-details-content {
+  display: grid;
+  gap: 6px;
+}
+
+.gods-eye-osint-marker-title {
+  color: #ffffff;
+  font-size: 11px;
+  line-height: 1.35;
+}
+
+.gods-eye-osint-marker-meta {
+  color: rgba(255, 226, 157, 0.72);
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.gods-eye-osint-marker-facts {
+  display: grid;
+  gap: 5px;
+}
+
+.gods-eye-osint-marker-fact {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 7px;
+  font-size: 9px;
+  line-height: 1.35;
+}
+
+.gods-eye-osint-marker-fact span {
+  color: rgba(255, 211, 107, 0.68);
+  text-transform: uppercase;
+}
+
+.gods-eye-osint-marker-fact strong {
+  color: rgba(240, 250, 255, 0.88);
+  overflow-wrap: anywhere;
+}
+
+.gods-eye-osint-marker-source {
+  min-height: 30px;
+  padding: 7px 9px;
+  border: 1px solid rgba(255, 211, 107, 0.45);
+  border-radius: 5px;
+  background: rgba(90, 61, 5, 0.45);
+  color: #ffe7a6;
+  font: 700 9px/1.2 'JetBrains Mono', ui-monospace, monospace;
+  cursor: pointer;
+}
+
+.gods-eye-osint-marker-source:hover,
+.gods-eye-osint-marker-source:focus-visible {
+  border-color: rgba(255, 255, 255, 0.9);
+  color: #ffffff;
+  outline: none;
+}

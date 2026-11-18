@@ -1,0 +1,197 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GOD'S EYE v2 - OSINT Incident Intelligence</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="/v2.css?v=20260728-intel-v1" />
+  </head>
+  <body>
+    <div id="bg-map" aria-hidden="true"></div>
+    <div id="scanlines" aria-hidden="true"></div>
+
+    <header id="topbar">
+      <a id="logo" href="/">GOD'S <span>EYE</span></a>
+      <div class="page-title">
+        <strong>v2</strong>
+        <span>Open Source Incident Intelligence Platform</span>
+      </div>
+      <nav class="nav-actions" aria-label="Navigation">
+        <a class="hud-button" href="/">Dashboard</a>
+        <a class="hud-button" href="/traffic.html">Live Traffic</a>
+        <a class="hud-button" href="/globe.html">3D Globe</a>
+        <button class="hud-button" id="refreshBtn" type="button">Refresh</button>
+      </nav>
+      <div id="clock">
+        <div id="clk-time">--:--:--</div>
+        <div id="clk-date">UTC</div>
+      </div>
+    </header>
+
+    <main class="shell">
+      <section class="metric-strip" aria-label="Platform metrics">
+        <article class="metric">
+          <span>OSINT Events</span>
+          <strong id="totalEvents">0</strong>
+        </article>
+        <article class="metric danger">
+          <span>Priority</span>
+          <strong id="highPriority">0</strong>
+        </article>
+        <article class="metric amber">
+          <span>Reports</span>
+          <strong id="reportCount">0</strong>
+        </article>
+        <article class="metric green">
+          <span>AI Engine</span>
+          <strong id="aiEngine">LOCAL</strong>
+        </article>
+      </section>
+
+      <section class="workbench">
+        <aside class="panel correlation-panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Incident Desk</span>
+              <h1>Report Builder</h1>
+            </div>
+            <span class="status-pill" id="backendStatus">FastAPI</span>
+          </div>
+
+          <form id="incidentForm" class="incident-form">
+            <label for="incidentInput">Incident Focus</label>
+            <textarea id="incidentInput" rows="5" placeholder="Example: Red Sea shipping disruption, India border tensions, election protests, ransomware outage, oil price shock"></textarea>
+            <div class="input-row">
+              <select id="reportDays" aria-label="Report time window">
+                <option value="1">24 hours</option>
+                <option value="7" selected>7 days</option>
+                <option value="30">30 days</option>
+                <option value="90">90 days</option>
+              </select>
+              <select id="reportTemplate" aria-label="Report template">
+                <option value="executive" selected>Executive Brief</option>
+                <option value="military">Military SITREP</option>
+                <option value="geopolitical">Geopolitical Risk</option>
+                <option value="economic">Economic Impact</option>
+                <option value="cyber">Cyber/Security</option>
+                <option value="daily">Daily Summary</option>
+              </select>
+              <button class="hud-button primary" type="submit">Save Report</button>
+            </div>
+          </form>
+
+          <div class="risk-card report-card" id="reportCard">
+            <div class="risk-top">
+              <span id="reportLabel">No report yet</span>
+              <div class="report-card-actions">
+                <strong id="reportMeta">--</strong>
+                <button class="icon-button compact" id="reportPdfBtn" type="button" title="Download PDF" disabled>PDF</button>
+              </div>
+            </div>
+            <p id="reportSummary">Create an incident report to store AI-assisted analysis in MongoDB Atlas.</p>
+            <pre id="reportPreview">Saved reports will appear here.</pre>
+          </div>
+
+          <section class="mini-section">
+            <div class="section-title">Intelligence Setup</div>
+            <div id="sourceStatus" class="provider-status"></div>
+          </section>
+        </aside>
+
+        <section class="panel analytics-panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Persistence</span>
+              <h2>OSINT Trends</h2>
+            </div>
+            <button class="icon-button" id="reportBtn" type="button" title="Generate report">REPORT</button>
+          </div>
+
+          <div class="analytics-grid">
+            <section class="chart-card">
+              <div class="section-title">OSINT Categories</div>
+              <div id="categoryBars" class="bar-list"></div>
+            </section>
+            <section class="chart-card">
+              <div class="section-title">Update Activity</div>
+              <div id="timeline" class="timeline"></div>
+            </section>
+          </div>
+
+          <div class="analytics-grid intel-grid">
+            <section class="chart-card">
+              <div class="section-title">Dashboard Analytics</div>
+              <div id="dashboardAnalytics" class="intel-list"></div>
+            </section>
+            <section class="chart-card">
+              <div class="section-title">Source Credibility</div>
+              <div id="sourceCredibility" class="intel-list"></div>
+            </section>
+          </div>
+
+          <div class="analytics-grid intel-grid">
+            <section class="chart-card">
+              <div class="section-title">Duplicate / Confirmation Groups</div>
+              <div id="duplicateGroups" class="intel-list"></div>
+            </section>
+            <section class="chart-card">
+              <div class="section-title">Map Intelligence</div>
+              <div id="mapIntel" class="intel-list"></div>
+            </section>
+          </div>
+
+          <div class="analytics-grid lower">
+            <section class="chart-card">
+              <div class="section-title">Analyst Watchlist</div>
+              <div id="topEvents" class="event-list"></div>
+            </section>
+            <section class="chart-card">
+              <div class="section-title">Hotspots</div>
+              <div id="hotspots" class="hotspot-list"></div>
+            </section>
+          </div>
+
+          <section class="chart-card history-card">
+            <div class="library-head">
+              <div class="section-title">Report Library</div>
+              <div class="library-controls">
+                <input id="reportSearch" type="search" placeholder="Search reports" />
+                <select id="libraryTemplate" aria-label="Filter report template">
+                  <option value="">All templates</option>
+                  <option value="executive">Executive</option>
+                  <option value="military">Military</option>
+                  <option value="geopolitical">Geopolitical</option>
+                  <option value="economic">Economic</option>
+                  <option value="cyber">Cyber</option>
+                  <option value="daily">Daily</option>
+                </select>
+              </div>
+            </div>
+            <div id="reportHistory" class="report-history"></div>
+          </section>
+        </section>
+
+        <aside class="panel chat-panel">
+          <div class="panel-head">
+            <div>
+              <span class="eyebrow">Assistant</span>
+              <h2>AI Analyst</h2>
+            </div>
+            <span class="status-pill live">Ready</span>
+          </div>
+
+          <div id="chatLog" class="chat-log" aria-live="polite"></div>
+
+          <form id="chatForm" class="chat-form">
+            <textarea id="chatInput" rows="3" placeholder="Ask for military updates, geopolitical hotspots, economic impact, cyber incidents, energy risk, or a saved incident brief"></textarea>
+            <button class="hud-button primary" type="submit">Send</button>
+          </form>
+        </aside>
+      </section>
+    </main>
+
+    <div id="toast" role="status" aria-live="polite"></div>
+    <script src="/v2.js?v=20260728-intel-v1" defer></script>
+  </body>
+</html>

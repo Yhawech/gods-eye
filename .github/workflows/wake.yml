@@ -1,0 +1,38 @@
+name: Wake GOD EYE (start stack)
+on:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+concurrency:
+  group: gods-eye-wake-park
+  cancel-in-progress: false
+
+jobs:
+  wake:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Configure AWS credentials (OIDC)
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_TO_ASSUME }}
+          aws-region: ${{ vars.AWS_REGION || 'ap-south-1' }}
+
+      - name: Wake the stack
+        run: bash aws-deploy/start-everything.sh
+
+      - name: Print live URLs
+        if: always()
+        run: |
+          ALB_DNS=$(aws elbv2 describe-load-balancers --names gods-eye-alb --query 'LoadBalancers[0].DNSName' --output text 2>/dev/null || echo "not-found")
+          {
+            echo "## GOD EYE is awake"
+            echo "- Dashboard: http://$ALB_DNS"
+            echo "- Globe: http://$ALB_DNS:8080"
+            echo "- Health: http://$ALB_DNS/api/health"
+          } >> "$GITHUB_STEP_SUMMARY"

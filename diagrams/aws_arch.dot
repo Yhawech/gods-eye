@@ -1,0 +1,43 @@
+digraph G {
+  graph [bgcolor="transparent", rankdir=LR, splines=ortho, nodesep=0.35, ranksep=0.5, pad=0.25];
+  node [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=14, color="#22D3EE", fillcolor="#141C2E", fontcolor="#E6EDF7", margin="0.22,0.12", penwidth=1.6];
+  edge [color="#334155", arrowsize=0.8, penwidth=1.6];
+
+  users [label="End Users"];
+  r53 [label="Route 53 + ACM\n(DNS + HTTPS)"];
+  alb [label="Application\nLoad Balancer", color="#22D3EE"];
+
+  subgraph cluster_vpc {
+    label="Amazon VPC"; fontname="Segoe UI"; fontsize=16; fontcolor="#22D3EE"; color="#22D3EE"; style="rounded,filled"; fillcolor="#0F1626"; penwidth=1.6; margin=16;
+    subgraph cluster_pub {
+      label="Public Subnet"; fontname="Segoe UI"; fontsize=13; fontcolor="#2DD4BF"; color="#2DD4BF"; style="rounded,filled"; fillcolor="#0B1526"; margin=14;
+      nat [label="NAT Gateway\n(Elastic IP)"];
+    }
+    subgraph cluster_priv {
+      label="Private Subnet"; fontname="Segoe UI"; fontsize=13; fontcolor="#2DD4BF"; color="#2DD4BF"; style="rounded,filled"; fillcolor="#0B1526"; margin=14;
+      ec2 [label="EC2 Instances\nFastAPI (port 4173)", color="#22D3EE"];
+    }
+  }
+
+  atlas [label="MongoDB Atlas\n(via NAT)", color="#F59E0B", fillcolor="#1C1A10"];
+
+  subgraph cluster_svc {
+    label="Support Services"; fontname="Segoe UI"; fontsize=13; fontcolor="#8B5CF6"; color="#8B5CF6"; style="rounded,filled"; fillcolor="#0F1626"; penwidth=1.4; margin=14;
+    node [fontsize=12];
+    s3 [label="S3\nArtifacts"];
+    codedeploy [label="CodeDeploy"];
+    cw [label="CloudWatch"];
+    sns [label="SNS"];
+    sm [label="Secrets\nManager"];
+    iam [label="IAM"];
+  }
+
+  users -> r53 -> alb;
+  alb -> ec2;
+  ec2 -> nat;
+  nat -> atlas;
+  codedeploy -> ec2 [color="#8B5CF6"];
+  sm -> ec2 [color="#8B5CF6"];
+  cw -> ec2 [color="#8B5CF6"];
+  s3 -> codedeploy [color="#8B5CF6"];
+}

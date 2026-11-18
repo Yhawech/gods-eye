@@ -1,0 +1,246 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GOD'S EYE - Global Intelligence Dashboard</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/styles.css?v=20260708-leaflet-fast1" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  </head>
+  <body>
+    <div id="loader" aria-live="polite">
+      <div class="loader-logo">GOD'S <span>EYE</span></div>
+      <div class="loader-sub">GLOBAL INTELLIGENCE PLATFORM</div>
+      <div class="loader-track"><span></span></div>
+      <div class="loader-status">Connecting to live OSINT sources</div>
+    </div>
+
+    <div id="map" class="map" aria-label="Global event map"></div>
+    <div id="map-grid" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+    <div id="scanlines" aria-hidden="true"></div>
+    <div class="bracket tl" aria-hidden="true"></div>
+    <div class="bracket tr" aria-hidden="true"></div>
+    <div class="bracket bl" aria-hidden="true"></div>
+    <div class="bracket br" aria-hidden="true"></div>
+
+    <header id="topbar">
+      <div id="logo">GOD'S <span>EYE</span></div>
+
+      <nav class="nav-pills" aria-label="Time range">
+        <button class="nav-pill active" type="button" data-range="24h">24H</button>
+        <button class="nav-pill" type="button" data-range="7d">7D</button>
+        <button class="nav-pill" type="button" data-range="30d">30D</button>
+        <button class="nav-pill" type="button" data-range="90d">90D</button>
+      </nav>
+
+      <div class="top-chips" aria-label="Live counters">
+        <div class="chip">
+          <span class="dot cyan"></span>
+          <strong id="totalCount">0</strong>
+          <span>Events</span>
+        </div>
+        <div class="chip">
+          <span class="dot red"></span>
+          <strong id="priorityCount">0</strong>
+          <span>Priority</span>
+        </div>
+        <div class="chip">
+          <span class="dot green"></span>
+          <strong id="sourceCount">0</strong>
+          <span>Sources</span>
+        </div>
+      </div>
+
+      <a class="hud-button nav-link-button" href="/v2.html">Threat Intel</a>
+      <a class="hud-button nav-link-button" href="/traffic.html">Live Traffic</a>
+      <a class="hud-button nav-link-button" href="/globe.html">3D Globe</a>
+      <button class="hud-button" id="refreshBtn" type="button" title="Refresh live data">Refresh</button>
+
+      <div id="clock" aria-label="UTC clock">
+        <div class="time" id="clk-time">--:--:--</div>
+        <div class="date" id="clk-date">UTC</div>
+      </div>
+    </header>
+
+    <aside id="sidebar" class="hud-panel">
+      <section class="section">
+        <div class="section-head open">
+          <span class="section-title">Data Layers</span>
+          <span class="section-meta" id="filteredCount">0 shown</span>
+        </div>
+        <div class="section-body">
+          <div class="search-box">
+            <span>Search</span>
+            <input id="searchInput" type="search" placeholder="Country, source, keyword" autocomplete="off" />
+          </div>
+
+          <div class="select-grid">
+            <label>
+              <span>Severity</span>
+              <select id="severitySelect">
+                <option value="all">All levels</option>
+                <option value="critical">Critical only</option>
+                <option value="high">High and critical</option>
+                <option value="moderate">Moderate and above</option>
+                <option value="low">Low and above</option>
+              </select>
+            </label>
+            <label>
+              <span>Sort</span>
+              <select id="sortSelect">
+                <option value="priority">Priority</option>
+                <option value="newest">Newest</option>
+                <option value="source">Source</option>
+                <option value="category">Category</option>
+              </select>
+            </label>
+          </div>
+
+          <div id="categoryToggles" class="category-toggles"></div>
+        </div>
+      </section>
+
+      <section class="section compact-controls">
+        <div class="section-head open">
+          <span class="section-title">Controls</span>
+          <button class="mini-button" id="resetBtn" type="button">Reset</button>
+        </div>
+        <div class="section-body">
+          <label class="switch-row">
+            <input id="mappedOnly" type="checkbox" />
+            <span class="switch-visual"></span>
+            <span>
+              <strong>Mapped only</strong>
+              <small>Require coordinates</small>
+            </span>
+          </label>
+
+          <label class="switch-row">
+            <input id="autoRefresh" type="checkbox" checked />
+            <span class="switch-visual"></span>
+            <span>
+              <strong>Auto refresh</strong>
+              <small id="nextRefresh">Every 5 minutes</small>
+            </span>
+          </label>
+
+          <div class="button-grid">
+            <button class="hud-button secondary-button" id="exportBtn" type="button">Export CSV</button>
+            <button class="hud-button secondary-button" id="copyBriefBtn" type="button">Copy Brief</button>
+          </div>
+        </div>
+      </section>
+
+      <section class="section feed-section">
+        <div class="section-head open">
+          <span class="section-title">Live Feed</span>
+          <span class="feed-badge live">Node API</span>
+        </div>
+        <div id="eventList" class="event-list"></div>
+      </section>
+    </aside>
+
+    <button id="sidebarToggle" type="button" aria-label="Toggle sidebar">&lt;</button>
+
+    <aside id="detail-panel" class="hud-panel">
+      <section class="detail-top">
+        <div>
+          <span class="section-title">Global Status</span>
+          <h1 id="mapTitle">Global Event Picture</h1>
+        </div>
+        <div class="status-pill" id="liveStatus">
+          <span class="pulse"></span>
+          <span>Connecting</span>
+        </div>
+      </section>
+
+      <div class="stat-grid">
+        <button class="stat-card" type="button" id="fitMapBtn">
+          <strong id="mappedStat">0</strong>
+          <span>Mapped</span>
+        </button>
+        <button class="stat-card" type="button" id="locateHighBtn">
+          <strong id="highestStat">0</strong>
+          <span>Top Score</span>
+        </button>
+        <div class="stat-card">
+          <strong id="updatedTime">Not refreshed</strong>
+          <span>Last Sync</span>
+        </div>
+        <div class="stat-card">
+          <strong id="rangeStat">24H</strong>
+          <span>Window</span>
+        </div>
+      </div>
+
+      <section class="threat-block">
+        <div class="threat-header">
+          <span class="threat-title">Global Threat Index</span>
+          <span class="threat-pct" id="threatPct">--%</span>
+        </div>
+        <div class="threat-bar"><span id="threatFill"></span></div>
+        <div class="threat-ticks"><span>LOW</span><span>MODERATE</span><span>HIGH</span></div>
+      </section>
+
+      <section class="detail-card selected-section">
+        <div class="detail-card-title">Selected Event</div>
+        <div id="selectedEvent" class="selected-event empty-state">Select an item on the map or feed.</div>
+      </section>
+
+      <section class="detail-card">
+        <div class="detail-card-title">Intelligence Overview</div>
+        <div id="overviewText" class="overview-text"></div>
+      </section>
+
+      <section class="detail-card">
+        <div class="detail-card-title">Priority Watchlist</div>
+        <div id="watchlist" class="watchlist"></div>
+      </section>
+
+      <section class="detail-card">
+        <div class="detail-card-title">Hotspots</div>
+        <div id="hotspots" class="hotspot-list"></div>
+      </section>
+
+      <section class="detail-card">
+        <div class="detail-card-title">Source Health</div>
+        <div id="sourceHealth" class="source-health"></div>
+      </section>
+    </aside>
+
+    <div id="mapLegend" class="map-legend" aria-label="Map legend"></div>
+
+    <div id="map-controls" aria-label="Map controls">
+      <button class="ctrl-btn" type="button" id="zoomInBtn" title="Zoom in">+</button>
+      <button class="ctrl-btn" type="button" id="zoomOutBtn" title="Zoom out">-</button>
+      <span class="ctrl-sep"></span>
+      <button class="ctrl-btn wide" type="button" id="resetMapBtn" title="Reset map">FIT</button>
+      <button class="ctrl-btn wide" type="button" id="styleMapBtn" title="Change map style">MAP</button>
+    </div>
+
+    <div id="coord-bar">Hover the map for coordinates</div>
+
+    <footer id="statusbar">
+      <div class="live-badge">LIVE <span id="live-ago">syncing</span></div>
+      <div class="ticker-wrap">
+        <div class="ticker-inner" id="ticker">
+          <span>GOD'S EYE Global Intelligence Platform</span>
+          <span>Sources: USGS, NASA EONET, NOAA/NWS, GDACS, Defense.gov, Google News RSS, GDELT</span>
+          <span>All data is pulled through the local Node API</span>
+          <span>GOD'S EYE Global Intelligence Platform</span>
+        </div>
+      </div>
+      <div class="status-dots">
+        <span class="source-dot" id="sd-official"></span><span>Official</span>
+        <span class="source-dot" id="sd-news"></span><span>News</span>
+        <span class="source-dot" id="sd-weather"></span><span>Weather</span>
+      </div>
+    </footer>
+
+    <div id="toast" class="toast" role="status" aria-live="polite"></div>
+    <script src="/app.js?v=20260708-leaflet-fast1" defer></script>
+  </body>
+</html>

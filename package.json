@@ -1,0 +1,19 @@
+{
+  "name": "god-eyes-osint-dashboard",
+  "version": "1.0.0",
+  "description": "Cloud-native GOD EYE v2 OSINT and threat intelligence correlation platform.",
+  "type": "module",
+  "scripts": {
+    "start": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 4173",
+    "start:api": "python -m uvicorn backend.main:app --host 127.0.0.1 --port 4173",
+    "start:node": "node server.js",
+    "setup:globe": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/setup_globe.ps1",
+    "install:globe": "npm --prefix tmp/gods-eye-view install --engine-strict=false",
+    "start:globe": "npm --prefix tmp/gods-eye-view run dev -- --host 127.0.0.1 --port 4174",
+    "patch:globe": "node scripts/patch_globe_layout.mjs",
+    "start:full": "powershell -NoProfile -ExecutionPolicy Bypass -File scripts/start_full.ps1"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}

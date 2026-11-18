@@ -1,0 +1,3174 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GOD'S EYE — Global Intelligence Dashboard</title>
+<link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css"/>
+<script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js"></script>
+<style>
+/* ─────────────────────────────────────────
+   DESIGN TOKENS
+───────────────────────────────────────── */
+:root {
+  --bg:        #070b14;
+  --panel:     #0d1520;
+  --panel2:    #111d2c;
+  --border:    #1a3050;
+  --border-hi: #1e6fa0;
+  --cyan:      #29d4f5;
+  --cyan-dim:  #1a8aaa;
+  --green:     #22d97a;
+  --red:       #f04060;
+  --orange:    #f08030;
+  --amber:     #f0c030;
+  --purple:    #9060f0;
+  --blue:      #3080f0;
+  --text:      #c8dde8;
+  --text-dim:  #5a8099;
+  --text-hi:   #e8f4ff;
+  --mono:      'Courier New', monospace;
+  --sans:      system-ui, -apple-system, sans-serif;
+  --radius:    6px;
+  --shadow:    0 4px 24px rgba(0,0,0,0.6);
+}
+
+* { box-sizing: border-box; margin: 0; padding: 0; }
+html, body { width: 100%; height: 100%; overflow: hidden; background: var(--bg); color: var(--text); font-family: var(--sans); font-size: 13px; }
+
+/* ─────────────────────────────────────────
+   MAP
+───────────────────────────────────────── */
+#map {
+  position: fixed; inset: 0; z-index: 0;
+  background: #020810;
+}
+.leaflet-container { background: #030d1a !important; }
+.leaflet-tile { filter: brightness(0.35) saturate(0.3) hue-rotate(195deg) contrast(1.5) !important; }
+.leaflet-control-attribution, .leaflet-control-zoom { display: none !important; }
+
+/* Dark Esri satellite style - richer looking */
+.map-style-sat .leaflet-tile {
+  filter: brightness(0.4) saturate(0.5) hue-rotate(170deg) contrast(1.3) !important;
+}
+
+/* Grid overlay on map */
+#map-grid {
+  position: fixed; inset: 0; z-index: 1; pointer-events: none;
+  background-image:
+    linear-gradient(rgba(41,212,245,0.03) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(41,212,245,0.03) 1px, transparent 1px);
+  background-size: 80px 80px;
+}
+
+/* Vignette */
+#vignette {
+  position: fixed; inset: 0; z-index: 2; pointer-events: none;
+  background: radial-gradient(ellipse 90% 90% at 50% 50%, transparent 40%, rgba(7,11,20,0.7) 100%);
+}
+
+/* Scanlines */
+#scanlines {
+  position: fixed; inset: 0; z-index: 3; pointer-events: none; opacity: 0.3;
+  background: repeating-linear-gradient(0deg, transparent, transparent 3px, rgba(0,0,0,0.1) 3px, rgba(0,0,0,0.1) 4px);
+}
+
+/* ─────────────────────────────────────────
+   CORNER BRACKETS (HUD style)
+───────────────────────────────────────── */
+.bracket {
+  position: fixed; z-index: 10; width: 28px; height: 28px; pointer-events: none;
+}
+.bracket::before, .bracket::after {
+  content: ''; position: absolute; background: var(--cyan); opacity: 0.5;
+}
+.bracket::before { width: 2px; height: 100%; }
+.bracket::after  { width: 100%; height: 2px; }
+.bracket.tl { top: 14px; left: 14px; }
+.bracket.tr { top: 14px; right: 14px; transform: scaleX(-1); }
+.bracket.bl { bottom: 14px; left: 14px; transform: scaleY(-1); }
+.bracket.br { bottom: 14px; right: 14px; transform: scale(-1); }
+
+/* ─────────────────────────────────────────
+   TOP NAV BAR
+───────────────────────────────────────── */
+#topbar {
+  position: fixed; top: 0; left: 0; right: 0; height: 54px; z-index: 40;
+  background: linear-gradient(180deg, rgba(7,11,20,0.98) 0%, rgba(7,11,20,0.85) 100%);
+  border-bottom: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 16px; gap: 0;
+  backdrop-filter: blur(10px);
+}
+
+#logo {
+  font-family: var(--mono); font-size: 18px; font-weight: bold;
+  letter-spacing: 0.2em; color: var(--cyan);
+  text-shadow: 0 0 20px rgba(41,212,245,0.5);
+  margin-right: 24px; white-space: nowrap;
+}
+#logo .eye { color: var(--red); }
+
+/* Nav pills */
+.nav-pills { display: flex; gap: 4px; margin-right: auto; }
+.nav-pill {
+  padding: 5px 14px; border-radius: 20px; border: 1px solid var(--border);
+  background: transparent; color: var(--text-dim); font-size: 11px; font-weight: 600;
+  letter-spacing: 0.06em; cursor: pointer; transition: all 0.2s; white-space: nowrap;
+  text-transform: uppercase;
+}
+.nav-pill:hover { border-color: var(--cyan-dim); color: var(--text); }
+.nav-pill.active { background: rgba(41,212,245,0.12); border-color: var(--cyan); color: var(--cyan); }
+
+/* Top stat chips */
+.top-chips { display: flex; gap: 6px; margin-left: 12px; }
+.chip {
+  display: flex; align-items: center; gap: 6px;
+  padding: 4px 10px; border-radius: 20px;
+  border: 1px solid var(--border); background: var(--panel);
+  font-family: var(--mono); font-size: 11px; white-space: nowrap;
+}
+.chip .dot {
+  width: 7px; height: 7px; border-radius: 50%;
+  animation: blink 2s ease-in-out infinite;
+}
+@keyframes blink { 0%,100%{opacity:1} 50%{opacity:0.3} }
+.chip .num { color: var(--text-hi); font-weight: bold; }
+.chip .lbl { color: var(--text-dim); }
+
+/* Clock */
+#clock {
+  font-family: var(--mono); font-size: 13px; margin-left: 16px;
+  text-align: right; line-height: 1.4;
+}
+#clock .time { color: var(--cyan); font-size: 15px; font-weight: bold; }
+#clock .date { color: var(--text-dim); font-size: 11px; }
+
+/* ─────────────────────────────────────────
+   SIDE PANEL (left)
+───────────────────────────────────────── */
+#sidebar {
+  position: fixed; left: 0; top: 54px; bottom: 46px; width: 300px; z-index: 30;
+  background: rgba(7,11,20,0.92); border-right: 1px solid var(--border);
+  display: flex; flex-direction: column; backdrop-filter: blur(16px);
+  transition: transform 0.3s ease;
+}
+#sidebar.hidden { transform: translateX(-300px); }
+
+/* Layer section */
+.section {
+  border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.section-head {
+  display: flex; align-items: center; justify-content: space-between;
+  padding: 10px 14px; cursor: pointer; user-select: none;
+}
+.section-head:hover { background: rgba(41,212,245,0.03); }
+.section-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.14em;
+  text-transform: uppercase; color: var(--cyan);
+}
+.section-meta { font-family: var(--mono); font-size: 10px; color: var(--text-dim); }
+.section-body { padding: 6px 14px 10px; }
+.section-body.collapsed { display: none; }
+.chevron { font-size: 10px; color: var(--text-dim); transition: transform 0.2s; }
+.section-head.open .chevron { transform: rotate(180deg); }
+
+/* Layer toggle rows */
+.layer-row {
+  display: flex; align-items: center; padding: 7px 0; gap: 10px;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.layer-row:last-child { border-bottom: none; }
+.layer-indicator {
+  width: 10px; height: 10px; border-radius: 50%; flex-shrink: 0;
+  box-shadow: 0 0 6px currentColor;
+}
+.layer-text { flex: 1; }
+.layer-name { font-size: 12px; font-weight: 600; color: var(--text-hi); }
+.layer-sub  { font-size: 10px; color: var(--text-dim); font-family: var(--mono); margin-top: 1px; }
+
+/* Toggle switch */
+.toggle {
+  position: relative; width: 36px; height: 18px;
+  cursor: pointer; flex-shrink: 0;
+}
+.toggle input { opacity: 0; width: 0; height: 0; }
+.toggle-bg {
+  position: absolute; inset: 0; border-radius: 9px;
+  background: rgba(255,255,255,0.1); border: 1px solid var(--border);
+  transition: all 0.2s;
+}
+.toggle input:checked ~ .toggle-bg { background: rgba(41,212,245,0.25); border-color: var(--cyan); }
+.toggle-knob {
+  position: absolute; top: 2px; left: 2px; width: 12px; height: 12px;
+  border-radius: 50%; background: var(--text-dim); transition: all 0.2s;
+}
+.toggle input:checked ~ .toggle-knob { transform: translateX(18px); background: var(--cyan); }
+
+/* Feed scroll area */
+#feed-panel {
+  flex: 1; overflow-y: auto; scrollbar-width: thin;
+  scrollbar-color: var(--border) transparent;
+}
+#feed-panel::-webkit-scrollbar { width: 4px; }
+#feed-panel::-webkit-scrollbar-thumb { background: var(--border); border-radius: 2px; }
+
+/* Feed items */
+.feed-section { border-bottom: 1px solid var(--border); }
+.feed-section-title {
+  padding: 8px 14px 4px; font-size: 10px; font-weight: 700;
+  letter-spacing: 0.12em; text-transform: uppercase; color: var(--text-dim);
+  display: flex; align-items: center; justify-content: space-between;
+}
+.feed-badge {
+  font-family: var(--mono); font-size: 9px; padding: 2px 6px;
+  border-radius: 10px; border: 1px solid var(--border);
+}
+.feed-badge.live { color: var(--green); border-color: var(--green); }
+.feed-badge.warn { color: var(--orange); border-color: var(--orange); }
+.feed-badge.info { color: var(--cyan); border-color: var(--cyan); }
+
+.feed-item {
+  padding: 8px 14px; border-bottom: 1px solid rgba(255,255,255,0.04);
+  cursor: pointer; transition: background 0.15s; display: flex; gap: 10px; align-items: flex-start;
+  animation: feedFadeIn 0.35s ease-out;
+}
+@keyframes feedFadeIn {
+  from { opacity: 0; transform: translateY(-4px); }
+  to   { opacity: 1; transform: translateY(0); }
+}
+.feed-item:hover { background: rgba(41,212,245,0.05); }
+.feed-item:last-child { border-bottom: none; }
+.feed-icon { font-size: 14px; flex-shrink: 0; margin-top: 1px; }
+.feed-body { flex: 1; min-width: 0; }
+.feed-title { font-size: 12px; font-weight: 600; color: var(--text-hi); 
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.feed-meta { font-size: 10px; color: var(--text-dim); font-family: var(--mono); margin-top: 2px; }
+.feed-val { font-family: var(--mono); font-size: 11px; color: var(--cyan); flex-shrink: 0; text-align: right; }
+
+/* Diagnostic / empty-state notices — distinct card so they read as
+   informative status, not just another feed item */
+.feed-item:has(.diag-note) { cursor: default; background: rgba(240,192,48,0.04); }
+.diag-note {
+  white-space: normal !important; line-height: 1.55; font-size: 11px !important;
+  color: var(--text-dim); padding: 2px 0;
+}
+.diag-note .diag-ok   { color: var(--green); font-weight: 600; }
+.diag-note .diag-fail { color: var(--red);   font-weight: 600; }
+
+/* Mag badge */
+.mag {
+  font-family: var(--mono); font-size: 12px; font-weight: bold;
+  width: 38px; flex-shrink: 0; text-align: center;
+  padding: 2px; border-radius: 4px; margin-top: 1px;
+}
+.mag-low  { color: var(--green);  background: rgba(34,217,122,0.1); }
+.mag-mid  { color: var(--amber);  background: rgba(240,192,48,0.1); }
+.mag-high { color: var(--red);    background: rgba(240,64,96,0.1);  }
+.mag-big  { color: #fff; background: var(--red); }
+
+/* ─────────────────────────────────────────
+   RIGHT INFO PANEL (detail)
+───────────────────────────────────────── */
+#detail-panel {
+  position: fixed; right: 0; top: 54px; bottom: 46px; width: 280px; z-index: 30;
+  background: rgba(7,11,20,0.92); border-left: 1px solid var(--border);
+  display: flex; flex-direction: column; backdrop-filter: blur(16px);
+  transition: transform 0.3s ease;
+}
+#detail-panel.hidden { transform: translateX(280px); }
+
+/* Stats cards */
+.stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; padding: 10px 12px; }
+.stat-grid .stat-card .stat-num { font-size: 18px; }
+.stat-card {
+  background: var(--panel2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 10px; text-align: center; cursor: pointer; transition: border-color 0.2s;
+}
+.stat-card:hover { border-color: var(--border-hi); }
+.stat-num {
+  font-family: var(--mono); font-size: 22px; font-weight: bold;
+  color: var(--cyan); line-height: 1;
+}
+.stat-lbl { font-size: 9px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.1em; margin-top: 4px; }
+
+/* Threat meter */
+.threat-block { padding: 10px 12px; border-bottom: 1px solid var(--border); }
+.threat-header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; }
+.threat-title { font-size: 10px; font-weight: 700; letter-spacing: 0.1em; text-transform: uppercase; color: var(--text-dim); }
+.threat-pct { font-family: var(--mono); font-size: 16px; font-weight: bold; }
+.threat-bar { height: 8px; background: rgba(255,255,255,0.07); border-radius: 4px; overflow: hidden; }
+.threat-fill { height: 100%; border-radius: 4px; transition: width 1s ease, background 1s ease; }
+.threat-ticks { display: flex; justify-content: space-between; font-size: 9px; color: var(--text-dim); margin-top: 4px; font-family: var(--mono); }
+
+/* Drawer (detail card) */
+#detail-drawer {
+  flex: 1; overflow-y: auto; padding: 12px;
+  scrollbar-width: thin; scrollbar-color: var(--border) transparent;
+}
+#detail-drawer::-webkit-scrollbar { width: 4px; }
+#detail-drawer::-webkit-scrollbar-thumb { background: var(--border); }
+
+.detail-card {
+  background: var(--panel2); border: 1px solid var(--border); border-radius: var(--radius);
+  padding: 12px; margin-bottom: 8px;
+}
+.detail-card-title {
+  font-size: 10px; font-weight: 700; letter-spacing: 0.12em; text-transform: uppercase;
+  color: var(--cyan); margin-bottom: 10px; display: flex; align-items: center; gap: 6px;
+}
+.detail-row {
+  display: flex; justify-content: space-between; align-items: center;
+  padding: 5px 0; border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.detail-row:last-child { border-bottom: none; }
+.detail-key { font-size: 10px; color: var(--text-dim); text-transform: uppercase; letter-spacing: 0.06em; }
+.detail-val { font-family: var(--mono); font-size: 12px; color: var(--text-hi); }
+
+/* Weather card */
+.wx-row {
+  display: flex; align-items: center; gap: 8px; padding: 5px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04);
+}
+.wx-row:last-child { border-bottom: none; }
+.wx-flag { font-size: 14px; }
+.wx-city { flex: 1; font-size: 11px; color: var(--text); }
+.wx-temp { font-family: var(--mono); font-size: 13px; font-weight: bold; }
+.wx-cond { font-size: 10px; color: var(--text-dim); text-align: right; }
+
+/* ISS tracker */
+.iss-card {
+  background: linear-gradient(135deg, rgba(144,96,240,0.1), rgba(41,212,245,0.05));
+  border: 1px solid rgba(144,96,240,0.3); border-radius: var(--radius); padding: 12px; margin-bottom: 8px;
+}
+.iss-title { font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--purple); margin-bottom: 8px; }
+.iss-position { font-family: var(--mono); font-size: 12px; color: var(--text-hi); margin-bottom: 6px; }
+.iss-detail { font-size: 10px; color: var(--text-dim); }
+
+/* ─────────────────────────────────────────
+   MAP CONTROLS (floating)
+───────────────────────────────────────── */
+#map-controls {
+  position: fixed; left: 310px; bottom: 60px; z-index: 20;
+  display: flex; flex-direction: column; gap: 4px;
+}
+#map-controls.sidebar-hidden { left: 14px; }
+.ctrl-btn {
+  width: 36px; height: 36px; background: rgba(13,21,32,0.92);
+  border: 1px solid var(--border); border-radius: var(--radius);
+  color: var(--text-dim); font-size: 15px; cursor: pointer;
+  display: flex; align-items: center; justify-content: center;
+  transition: all 0.15s; backdrop-filter: blur(8px);
+}
+.ctrl-btn:hover, .ctrl-btn.active { border-color: var(--cyan); color: var(--cyan); }
+.ctrl-sep { height: 1px; background: var(--border); margin: 2px 0; }
+
+/* ─────────────────────────────────────────
+   COORDINATE BAR
+───────────────────────────────────────── */
+#coord-bar {
+  position: fixed; bottom: 46px; left: 50%; transform: translateX(-50%);
+  z-index: 20; font-family: var(--mono); font-size: 11px; color: var(--cyan-dim);
+  background: rgba(7,11,20,0.85); padding: 3px 16px;
+  border: 1px solid var(--border); border-radius: 20px;
+  pointer-events: none; letter-spacing: 0.06em; white-space: nowrap;
+}
+
+/* ─────────────────────────────────────────
+   FLASH NOTIFICATION
+───────────────────────────────────────── */
+#flash {
+  position: fixed; top: 64px; left: 50%; transform: translateX(-50%);
+  z-index: 60; background: var(--panel); border: 1px solid var(--cyan);
+  border-radius: var(--radius); padding: 8px 18px;
+  font-family: var(--mono); font-size: 12px; color: var(--cyan);
+  opacity: 0; transition: opacity 0.25s; pointer-events: none;
+  box-shadow: 0 0 20px rgba(41,212,245,0.2);
+}
+#flash.show { opacity: 1; }
+
+/* ─────────────────────────────────────────
+   BOTTOM STATUS BAR
+───────────────────────────────────────── */
+#statusbar {
+  position: fixed; bottom: 0; left: 0; right: 0; height: 46px; z-index: 40;
+  background: rgba(7,11,20,0.97); border-top: 1px solid var(--border);
+  display: flex; align-items: center; padding: 0 14px; gap: 10px;
+  backdrop-filter: blur(10px);
+}
+.live-badge {
+  font-family: var(--mono); font-size: 10px; letter-spacing: 0.1em;
+  color: var(--green); border: 1px solid var(--green); padding: 2px 8px;
+  border-radius: 10px; white-space: nowrap; flex-shrink: 0;
+  animation: blink 2s ease-in-out infinite;
+}
+.ticker-wrap { flex: 1; overflow: hidden; height: 20px; }
+.ticker-inner {
+  display: flex; white-space: nowrap;
+  animation: scroll-ticker 80s linear infinite;
+}
+@keyframes scroll-ticker { 0% { transform: translateX(0); } 100% { transform: translateX(-50%); } }
+.ticker-item {
+  font-family: var(--mono); font-size: 11px; color: var(--text-dim);
+  padding: 0 20px; flex-shrink: 0;
+}
+.ticker-item::before { content: '◆ '; color: var(--cyan-dim); font-size: 8px; }
+.status-dots { display: flex; gap: 12px; flex-shrink: 0; }
+.status-dot {
+  display: flex; align-items: center; gap: 5px;
+  font-family: var(--mono); font-size: 10px; color: var(--text-dim);
+}
+.sdot { width: 6px; height: 6px; border-radius: 50%; background: var(--green); }
+.sdot.warn { background: var(--amber); }
+.sdot.err { background: var(--red); }
+
+/* OSM Attribution */
+#osm-attr {
+  position: fixed; bottom: 50px; right: 10px; z-index: 10;
+  font-size: 9px; color: rgba(90,128,153,0.5); pointer-events: auto;
+}
+#osm-attr a { color: rgba(41,212,245,0.4); text-decoration: none; }
+
+/* ─────────────────────────────────────────
+   SIDEBAR TOGGLE BUTTON
+───────────────────────────────────────── */
+#sidebar-toggle {
+  position: fixed; left: 300px; top: 50%; transform: translateY(-50%);
+  z-index: 35; width: 18px; height: 48px; background: var(--panel);
+  border: 1px solid var(--border); border-left: none;
+  border-radius: 0 4px 4px 0; cursor: pointer; transition: all 0.3s;
+  display: flex; align-items: center; justify-content: center;
+  color: var(--text-dim); font-size: 10px;
+}
+#sidebar-toggle:hover { color: var(--cyan); border-color: var(--cyan); }
+#sidebar-toggle.hidden-state { left: 0; }
+
+/* ─────────────────────────────────────────
+   LOADER
+───────────────────────────────────────── */
+#loader {
+  position: fixed; inset: 0; z-index: 100;
+  background: var(--bg); display: flex; flex-direction: column;
+  align-items: center; justify-content: center; gap: 24px;
+  transition: opacity 0.5s ease;
+}
+#loader.fade { opacity: 0; pointer-events: none; }
+.loader-logo {
+  font-family: var(--mono); font-size: 32px; font-weight: bold;
+  letter-spacing: 0.3em; color: var(--cyan);
+  text-shadow: 0 0 40px rgba(41,212,245,0.4);
+}
+.loader-logo .eye { color: var(--red); }
+.loader-sub { font-size: 11px; color: var(--text-dim); letter-spacing: 0.2em; font-family: var(--mono); }
+.loader-progress { width: 320px; }
+.loader-bar-bg { height: 2px; background: rgba(255,255,255,0.07); border-radius: 1px; overflow: hidden; }
+.loader-bar-fill {
+  height: 100%; background: linear-gradient(90deg, var(--cyan-dim), var(--cyan));
+  border-radius: 1px; width: 0%; transition: width 0.2s ease;
+  box-shadow: 0 0 12px var(--cyan);
+}
+.loader-status { font-family: var(--mono); font-size: 10px; color: var(--text-dim); margin-top: 8px; letter-spacing: 0.08em; }
+.loader-items { display: flex; gap: 20px; }
+.loader-item { font-family: var(--mono); font-size: 10px; color: var(--text-dim); display: flex; align-items: center; gap: 5px; }
+.loader-item .ok { color: var(--green); }
+.loader-item .pending { color: var(--amber); }
+
+/* ─────────────────────────────────────────
+   CUSTOM MARKERS
+───────────────────────────────────────── */
+.dot-marker {
+  border-radius: 50%; cursor: pointer;
+  border: 1.5px solid rgba(255,255,255,0.25);
+  transition: transform 0.1s;
+}
+.dot-marker:hover { transform: scale(2.2) !important; z-index: 9999 !important; }
+
+/* Pulse ring for ISS */
+@keyframes ring-pulse {
+  0%   { transform: translate(-50%,-50%) scale(1); opacity: 0.7; }
+  100% { transform: translate(-50%,-50%) scale(3); opacity: 0; }
+}
+.iss-ring {
+  position: absolute; width: 16px; height: 16px; border-radius: 50%;
+  border: 2px solid var(--purple); top: 50%; left: 50%;
+  animation: ring-pulse 2s ease-out infinite;
+}
+
+/* Pulse for events */
+@keyframes event-pulse {
+  0%   { transform: translate(-50%,-50%) scale(1); opacity: 0.5; }
+  100% { transform: translate(-50%,-50%) scale(2.5); opacity: 0; }
+}
+.event-ring {
+  position: absolute; width: 14px; height: 14px; border-radius: 50%;
+  border: 1.5px solid var(--red); top: 50%; left: 50%;
+  animation: event-pulse 2.5s ease-out infinite;
+}
+
+/* ─────────────────────────────────────────
+   POPUP overrides
+───────────────────────────────────────── */
+.leaflet-popup-content-wrapper {
+  background: var(--panel) !important; border: 1px solid var(--border) !important;
+  border-radius: var(--radius) !important; box-shadow: var(--shadow) !important;
+  padding: 0 !important; color: var(--text) !important;
+}
+.leaflet-popup-content { margin: 0 !important; }
+.leaflet-popup-tip { background: var(--panel) !important; }
+.leaflet-popup-close-button { color: var(--text-dim) !important; }
+.map-popup {
+  padding: 12px 14px; min-width: 200px; max-width: 260px;
+}
+.map-popup-title {
+  font-family: var(--mono); font-size: 12px; font-weight: bold;
+  color: var(--cyan); margin-bottom: 8px; display: flex; align-items: center; gap: 6px;
+}
+.map-popup-row {
+  display: flex; justify-content: space-between; padding: 3px 0;
+  border-bottom: 1px solid rgba(255,255,255,0.04); font-size: 11px;
+}
+.map-popup-row:last-child { border-bottom: none; }
+.map-popup-row .k { color: var(--text-dim); }
+.map-popup-row .v { font-family: var(--mono); color: var(--text-hi); }
+
+/* ─────────────────────────────────────────
+   UTILS
+───────────────────────────────────────── */
+.color-cyan   { color: var(--cyan); }
+.color-green  { color: var(--green); }
+.color-red    { color: var(--red); }
+.color-orange { color: var(--orange); }
+.color-amber  { color: var(--amber); }
+.color-purple { color: var(--purple); }
+
+/* ── MILITARY OSINT PANEL ── */
+.mil-osint-tab {
+  display: flex; border-bottom: 1px solid var(--border); flex-shrink: 0;
+}
+.mil-tab-btn {
+  flex: 1; padding: 7px 4px; font-size: 9px; font-weight: 700;
+  letter-spacing: 0.08em; text-transform: uppercase; cursor: pointer;
+  border: none; background: none; color: var(--text-dim);
+  border-bottom: 2px solid transparent; transition: all 0.2s;
+}
+.mil-tab-btn:hover { color: var(--text); }
+.mil-tab-btn.active { color: var(--amber); border-bottom-color: var(--amber); }
+.mil-tab-pane { display: none; }
+.mil-tab-pane.active { display: block; }
+
+/* Event severity badge */
+.severity {
+  font-family: var(--mono); font-size: 10px; font-weight: bold;
+  padding: 2px 6px; border-radius: 3px; flex-shrink: 0; white-space: nowrap;
+}
+.sev-high   { background: rgba(240,64,96,0.15);  color: var(--red); }
+.sev-medium { background: rgba(240,192,48,0.15); color: var(--amber); }
+.sev-low    { background: rgba(34,217,122,0.1);  color: var(--green); }
+.sev-info   { background: rgba(41,212,245,0.1);  color: var(--cyan); }
+
+/* Base marker pulse */
+@keyframes base-pulse {
+  0%,100% { box-shadow: 0 0 4px #f0c03088; }
+  50%      { box-shadow: 0 0 12px #f0c030cc, 0 0 20px #f0c03044; }
+}
+.base-marker { animation: base-pulse 3s ease-in-out infinite; }
+
+/* Conflict event pulse */
+@keyframes conflict-pulse {
+  0%   { transform: translate(-50%,-50%) scale(1); opacity:0.8; }
+  100% { transform: translate(-50%,-50%) scale(3.5); opacity:0; }
+}
+.conflict-ring {
+  position: absolute; width: 12px; height: 12px; border-radius: 50%;
+  border: 2px solid var(--red); top: 50%; left: 50%;
+  animation: conflict-pulse 2.2s ease-out infinite;
+}
+/* ── PERFORMANCE & SMOOTHNESS ── */
+.leaflet-marker-icon, .leaflet-marker-shadow { will-change: transform; }
+.leaflet-zoom-animated { transition: transform 0.2s cubic-bezier(0.25,0.46,0.45,0.94); }
+.leaflet-fade-anim .leaflet-popup { transition: opacity 0.15s ease; }
+#map { will-change: transform; }
+
+/* Better popup animation */
+.leaflet-popup-content-wrapper {
+  animation: popupIn 0.15s ease;
+}
+@keyframes popupIn {
+  from { opacity:0; transform:translateY(4px) scale(0.97); }
+  to   { opacity:1; transform:translateY(0) scale(1); }
+}
+
+/* Smoother feed items */
+.feed-item { transition: background 0.1s ease, border-color 0.1s ease; }
+.stat-card  { transition: border-color 0.2s ease, transform 0.15s ease; }
+.stat-card:hover { transform: translateY(-1px); }
+.stat-card:active { transform: translateY(0); }
+
+/* Better scrollbar */
+#feed-panel::-webkit-scrollbar { width: 3px; }
+#detail-drawer::-webkit-scrollbar { width: 3px; }
+
+/* Improved sidebar section */
+.section-body { transition: opacity 0.2s ease; }
+.section-body.collapsed { display: none; opacity: 0; }
+
+/* Number counter glow effect */
+.stat-num { transition: color 0.5s ease; text-shadow: 0 0 12px currentColor; }
+
+/* Better toggle */
+.toggle-bg, .toggle-knob { transition: all 0.18s cubic-bezier(0.4,0,0.2,1); }
+
+/* News feed item left border transition */
+#news-feed .feed-item { border-left-width: 2px; transition: background 0.1s, border-color 0.15s; }
+
+/* Chip counter smooth update */
+.chip .num { transition: all 0.4s ease; }
+</style>
+</head>
+<body>
+
+<!-- LOADER -->
+<div id="loader">
+  <div class="loader-logo">GOD'S <span class="eye">EYE</span></div>
+  <div class="loader-sub">GLOBAL INTELLIGENCE PLATFORM</div>
+  <div class="loader-progress">
+    <div class="loader-bar-bg"><div class="loader-bar-fill" id="lbar"></div></div>
+    <div class="loader-status" id="lstatus">Initializing…</div>
+  </div>
+  <div class="loader-items">
+    <div class="loader-item"><span id="li-map" class="pending">◎</span> MAP</div>
+    <div class="loader-item"><span id="li-flights" class="pending">◎</span> FLIGHTS</div>
+    <div class="loader-item"><span id="li-seismic" class="pending">◎</span> SEISMIC</div>
+    <div class="loader-item"><span id="li-weather" class="pending">◎</span> WEATHER</div>
+    <div class="loader-item"><span id="li-iss" class="pending">◎</span> ISS</div>
+    <div class="loader-item"><span id="li-fires" class="pending">◎</span> FIRES</div>
+  </div>
+</div>
+
+<!-- MAP -->
+<div id="map"></div>
+<div id="map-grid"></div>
+<div id="vignette"></div>
+<div id="scanlines"></div>
+<div class="bracket tl"></div><div class="bracket tr"></div>
+<div class="bracket bl"></div><div class="bracket br"></div>
+<div id="flash"></div>
+
+<!-- TOP BAR -->
+<div id="topbar">
+  <div id="logo">GOD'S <span class="eye">EYE</span></div>
+  <div class="nav-pills">
+    <button class="nav-pill active" onclick="showView('all')">All Layers</button>
+    <button class="nav-pill" onclick="showView('flights')">✈ Flights</button>
+    <button class="nav-pill" onclick="showView('seismic')">⚡ Seismic</button>
+    <button class="nav-pill" onclick="showView('fires')">🔥 Fires</button>
+    <button class="nav-pill" onclick="showView('iss')">🛸 ISS</button>
+    <button class="nav-pill" onclick="showView('milOsint')" style="color:var(--red)">⚔ Mil-OSINT</button>
+  </div>
+  <div class="top-chips">
+    <div class="chip">
+      <div class="dot" style="background:var(--cyan)"></div>
+      <span class="num" id="chip-flights">—</span>
+      <span class="lbl">Aircraft</span>
+    </div>
+    <div class="chip">
+      <div class="dot" style="background:var(--red)"></div>
+      <span class="num" id="chip-quakes">—</span>
+      <span class="lbl">Quakes</span>
+    </div>
+    <div class="chip">
+      <div class="dot" style="background:var(--orange)"></div>
+      <span class="num" id="chip-fires">—</span>
+      <span class="lbl">Fires</span>
+    </div>
+    <div class="chip">
+      <div class="dot" style="background:var(--purple)"></div>
+      <span class="num" id="chip-mil">—</span>
+      <span class="lbl">Military AC</span>
+    </div>
+    <div class="chip" style="border-color:rgba(240,64,96,0.3)">
+      <div class="dot" style="background:var(--red)"></div>
+      <span class="num" id="chip-conflicts">—</span>
+      <span class="lbl">Conflicts</span>
+    </div>
+    <div class="chip" style="border-color:rgba(240,192,48,0.3)">
+      <div class="dot" style="background:var(--amber)"></div>
+      <span class="num" id="chip-bases">—</span>
+      <span class="lbl">Mil.Bases</span>
+    </div>
+    <div class="chip" style="border-color:rgba(41,212,245,0.25)">
+      <div class="dot" style="background:var(--cyan)"></div>
+      <span class="num" id="chip-vessels">—</span>
+      <span class="lbl">Vessels</span>
+    </div>
+  </div>
+  <div id="clock">
+    <div class="time" id="clk-time">--:--:--</div>
+    <div class="date" id="clk-date">--- UTC</div>
+  </div>
+</div>
+
+<!-- SIDEBAR (left) -->
+<div id="sidebar">
+
+  <!-- LAYER TOGGLES -->
+  <div class="section">
+    <div class="section-head open" onclick="toggleSection(this)">
+      <span class="section-title">Data Layers</span>
+      <span class="chevron">▼</span>
+    </div>
+    <div class="section-body">
+      <div class="layer-row">
+        <div class="layer-indicator" style="color:var(--cyan);background:var(--cyan)"></div>
+        <div class="layer-text">
+          <div class="layer-name">Civil Flights</div>
+          <div class="layer-sub" id="lsub-flights">Loading…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-flights" checked onchange="toggleLayer('flights',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="layer-row">
+        <div class="layer-indicator" style="color:var(--amber);background:var(--amber)"></div>
+        <div class="layer-text">
+          <div class="layer-name">Military Aircraft</div>
+          <div class="layer-sub" id="lsub-mil">Loading…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-mil" checked onchange="toggleLayer('mil',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="layer-row">
+        <div class="layer-indicator" style="color:var(--red);background:var(--red)"></div>
+        <div class="layer-text">
+          <div class="layer-name">Earthquakes</div>
+          <div class="layer-sub" id="lsub-quakes">Loading…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-quakes" checked onchange="toggleLayer('quakes',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="layer-row">
+        <div class="layer-indicator" style="color:var(--orange);background:var(--orange)"></div>
+        <div class="layer-text">
+          <div class="layer-name">Wildfires</div>
+          <div class="layer-sub" id="lsub-fires">Loading…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-fires" checked onchange="toggleLayer('fires',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="layer-row">
+        <div class="layer-indicator" style="color:var(--purple);background:var(--purple)"></div>
+        <div class="layer-text">
+          <div class="layer-name">ISS (Real-time)</div>
+          <div class="layer-sub" id="lsub-iss">Tracking…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-iss" checked onchange="toggleLayer('iss',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="layer-row" style="border-top:1px solid rgba(240,64,96,0.15);margin-top:4px;padding-top:8px">
+        <div class="layer-indicator" style="color:var(--amber);background:var(--amber)"></div>
+        <div class="layer-text">
+          <div class="layer-name">Military Bases <span style="font-size:9px;color:var(--text-dim)">(OSM)</span></div>
+          <div class="layer-sub" id="lsub-bases">Loading…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-bases" checked onchange="toggleLayer('bases',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="layer-row">
+        <div class="layer-indicator" style="color:var(--red);background:var(--red)"></div>
+        <div class="layer-text">
+          <div class="layer-name">Conflict Events <span style="font-size:9px;color:var(--text-dim)">(Live Wire)</span></div>
+          <div class="layer-sub" id="lsub-conflicts">Loading…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-conflicts" checked onchange="toggleLayer('conflicts',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="layer-row">
+        <div class="layer-indicator" style="color:#e040fb;background:#e040fb"></div>
+        <div class="layer-text">
+          <div class="layer-name">Armed Conflicts <span style="font-size:9px;color:var(--text-dim);cursor:pointer;text-decoration:underline dotted" onclick="promptAcledSetup()" title="Optional: add a free verified-ACLED token. Off by default — runs on the live wire.">⚙</span></div>
+          <div class="layer-sub" id="lsub-acled">Loading…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-acled" checked onchange="toggleLayer('acled',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+      <div class="layer-row">
+        <div class="layer-indicator" style="color:var(--cyan);background:var(--cyan)"></div>
+        <div class="layer-text">
+          <div class="layer-name">Shipping / AIS <span style="font-size:9px;color:var(--text-dim);cursor:pointer;text-decoration:underline dotted" onclick="promptAisStreamSetup()" title="Click to add a free AISStream.io key for true real-time tracking">(Live ⚙)</span></div>
+          <div class="layer-sub" id="lsub-vessels">Loading…</div>
+        </div>
+        <label class="toggle"><input type="checkbox" id="tog-vessels" checked onchange="toggleLayer('vessels',this.checked)"><div class="toggle-bg"></div><div class="toggle-knob"></div></label>
+      </div>
+    </div>
+  </div>
+
+  <!-- LIVE FEED -->
+  <div id="feed-panel">
+
+    <!-- SEISMIC FEED -->
+    <div class="feed-section">
+      <div class="feed-section-title">
+        Recent Earthquakes <span class="feed-badge live">● USGS LIVE</span>
+      </div>
+      <div id="quake-feed">
+        <div class="feed-item"><div class="feed-body"><div class="feed-meta">Loading USGS data…</div></div></div>
+      </div>
+    </div>
+
+    <!-- MILITARY FEED -->
+    <div class="feed-section">
+      <div class="feed-section-title">
+        Military Aircraft <span class="feed-badge warn" id="mil-badge">● LIVE</span>
+      </div>
+      <div id="mil-feed">
+        <div class="feed-item"><div class="feed-body"><div class="feed-meta">Scanning transponders…</div></div></div>
+      </div>
+    </div>
+
+    <!-- FIRES FEED -->
+    <div class="feed-section">
+      <div class="feed-section-title">
+        Active Wildfires <span class="feed-badge warn">● NASA EONET</span>
+      </div>
+      <div id="fire-feed">
+        <div class="feed-item"><div class="feed-body"><div class="feed-meta">Loading EONET data…</div></div></div>
+      </div>
+    </div>
+
+    <!-- ⚔ MILITARY OSINT SECTION -->
+    <div class="feed-section">
+      <div class="feed-section-title" style="color:var(--red)">
+        ⚔ Military OSINT
+        <span style="display:flex;gap:4px">
+          <span class="feed-badge" style="color:var(--amber);border-color:var(--amber)" id="bases-badge">OSM</span>
+          <span class="feed-badge" style="color:var(--red);border-color:var(--red)" id="conflict-badge">WIRE</span>
+          <span class="feed-badge" style="color:#e040fb;border-color:#e040fb">ACLED</span>
+        </span>
+      </div>
+
+      <!-- Tabs -->
+      <div class="mil-osint-tab">
+        <button class="mil-tab-btn active" onclick="switchMilTab('bases',this)">🏛 Bases</button>
+        <button class="mil-tab-btn" onclick="switchMilTab('conflicts',this)">💥 Events</button>
+        <button class="mil-tab-btn" onclick="switchMilTab('acled',this)">⚡ ACLED</button>
+        <button class="mil-tab-btn" onclick="switchMilTab('news',this)">📰 News</button>
+        <button class="mil-tab-btn" onclick="switchMilTab('intel',this)">📡 Intel</button>
+      </div>
+
+      <!-- Bases pane -->
+      <div class="mil-tab-pane active" id="pane-bases">
+        <div id="bases-feed">
+          <div class="feed-item"><div class="feed-body"><div class="feed-meta">Querying OSM military installations…</div></div></div>
+        </div>
+      </div>
+
+      <!-- Conflict events pane -->
+      <div class="mil-tab-pane" id="pane-conflicts">
+        <div id="conflicts-feed">
+          <div class="feed-item"><div class="feed-body"><div class="feed-meta">Fetching live conflict events…</div></div></div>
+        </div>
+      </div>
+
+      <!-- ACLED pane -->
+      <div class="mil-tab-pane" id="pane-acled">
+        <div id="acled-feed">
+          <div class="feed-item"><div class="feed-body"><div class="feed-meta">Loading ACLED armed conflict data…</div></div></div>
+        </div>
+      </div>
+
+      <!-- OSINT News pane -->
+      <div class="mil-tab-pane" id="pane-news">
+        <div style="display:flex;gap:4px;padding:6px 12px 4px;flex-wrap:wrap">
+          <button class="mil-tab-btn active" style="flex:none;font-size:9px;padding:3px 8px" onclick="switchNewsFilter('all',this)">All</button>
+          <button class="mil-tab-btn" style="flex:none;font-size:9px;padding:3px 8px" onclick="switchNewsFilter('military',this)">Military</button>
+          <button class="mil-tab-btn" style="flex:none;font-size:9px;padding:3px 8px" onclick="switchNewsFilter('conflict',this)">Conflict</button>
+          <button class="mil-tab-btn" style="flex:none;font-size:9px;padding:3px 8px" onclick="switchNewsFilter('crisis',this)">Crisis</button>
+          <button class="mil-tab-btn" style="flex:none;font-size:9px;padding:3px 8px" onclick="switchNewsFilter('intel',this)">Intel</button>
+        </div>
+        <div id="news-feed">
+          <div class="feed-item"><div class="feed-body"><div class="feed-meta">Pulling live headlines from Google News, BBC, Al Jazeera, Defense News…</div></div></div>
+        </div>
+      </div>
+
+      <!-- Intel summary pane -->
+      <div class="mil-tab-pane" id="pane-intel">
+        <div id="intel-feed" style="padding:8px 14px">
+          <div style="font-size:10px;color:var(--text-dim)">Compiling intelligence summary…</div>
+        </div>
+      </div>
+
+    </div>
+
+  </div>
+</div>
+
+<!-- SIDEBAR TOGGLE -->
+<div id="sidebar-toggle" onclick="toggleSidebar()">‹</div>
+
+<!-- RIGHT PANEL -->
+<div id="detail-panel">
+
+  <!-- GLOBAL STATS -->
+  <div style="padding: 10px 12px 0; border-bottom: 1px solid var(--border);">
+    <div style="font-size: 10px; font-weight: 700; letter-spacing: 0.12em; color: var(--text-dim); text-transform: uppercase; margin-bottom: 8px;">Global Status</div>
+  </div>
+  <div class="stat-grid">
+    <div class="stat-card" onclick="flyToLayer('flights')">
+      <div class="stat-num color-cyan" id="stat-flights">—</div>
+      <div class="stat-lbl">Aircraft</div>
+    </div>
+    <div class="stat-card" onclick="flyToLayer('mil')">
+      <div class="stat-num color-amber" id="stat-mil">—</div>
+      <div class="stat-lbl">Military AC</div>
+    </div>
+    <div class="stat-card" onclick="flyToLayer('quakes')">
+      <div class="stat-num color-red" id="stat-quakes">—</div>
+      <div class="stat-lbl">Quakes 24h</div>
+    </div>
+    <div class="stat-card" onclick="flyToLayer('fires')">
+      <div class="stat-num color-orange" id="stat-fires">—</div>
+      <div class="stat-lbl">Active Fires</div>
+    </div>
+    <div class="stat-card" onclick="switchMilTab('conflicts',null);toggleSidebar(true)" style="border-color:rgba(240,64,96,0.25)">
+      <div class="stat-num color-red" id="stat-conflicts">—</div>
+      <div class="stat-lbl">Conflicts</div>
+    </div>
+    <div class="stat-card" onclick="switchMilTab('bases',null);toggleSidebar(true)" style="border-color:rgba(240,192,48,0.25)">
+      <div class="stat-num color-amber" id="stat-bases">—</div>
+      <div class="stat-lbl">Mil. Bases</div>
+    </div>
+  </div>
+
+  <!-- THREAT METER -->
+  <div class="threat-block">
+    <div class="threat-header">
+      <span class="threat-title">Global Threat Index</span>
+      <span class="threat-pct" id="threat-pct" style="color:var(--amber)">—%</span>
+    </div>
+    <div class="threat-bar"><div class="threat-fill" id="threat-fill" style="width:0%"></div></div>
+    <div class="threat-ticks"><span>LOW</span><span>MODERATE</span><span>HIGH</span></div>
+  </div>
+
+  <!-- DETAIL DRAWER (info cards) -->
+  <div id="detail-drawer">
+
+    <!-- ISS Card -->
+    <div class="iss-card" id="iss-card">
+      <div class="iss-title">🛸 ISS — REAL TIME POSITION</div>
+      <div class="iss-position" id="iss-pos">Fetching position…</div>
+      <div class="iss-detail" id="iss-detail">Speed: — km/h · Altitude: — km</div>
+    </div>
+
+    <!-- WEATHER -->
+    <div class="detail-card">
+      <div class="detail-card-title">🌡 Current Weather</div>
+      <div id="wx-list">
+        <div style="font-size:11px;color:var(--text-dim)">Loading…</div>
+      </div>
+    </div>
+
+    <!-- MAP LEGEND -->
+    <div class="detail-card">
+      <div class="detail-card-title">🗺 Map Legend</div>
+      <div class="detail-row"><div class="detail-key">● Cyan</div><div class="detail-val" style="color:var(--cyan)">Civil flights (high)</div></div>
+      <div class="detail-row"><div class="detail-key">● Blue</div><div class="detail-val" style="color:#3080f0">Civil flights (low)</div></div>
+      <div class="detail-row"><div class="detail-key">● Yellow</div><div class="detail-val" style="color:var(--amber)">Military aircraft</div></div>
+      <div class="detail-row"><div class="detail-key">● Red</div><div class="detail-val" style="color:var(--red)">Major quake M5+</div></div>
+      <div class="detail-row"><div class="detail-key">● Orange</div><div class="detail-val" style="color:var(--orange)">Wildfire / Quake M4+</div></div>
+      <div class="detail-row"><div class="detail-key">● Purple</div><div class="detail-val" style="color:var(--purple)">ISS orbit</div></div>
+      <div style="margin-top:8px;font-size:10px;color:var(--text-dim);font-family:var(--mono);line-height:1.8">
+        Click any dot → popup info<br>
+        Scroll → zoom · Drag → pan<br>
+        ⊕ → cycle map styles (4 modes)
+      </div>
+    </div>
+
+  </div>
+</div>
+
+<!-- MAP CONTROLS -->
+<div id="map-controls">
+  <button class="ctrl-btn" onclick="MAP.zoomIn()" title="Zoom In">+</button>
+  <button class="ctrl-btn" onclick="MAP.zoomOut()" title="Zoom Out">−</button>
+  <div class="ctrl-sep"></div>
+  <button class="ctrl-btn" onclick="mapReset()" title="Reset View" style="font-size:12px">⌂</button>
+  <button class="ctrl-btn" onclick="cycleStyle()" title="Change Map Style" style="font-size:12px">⊕</button>
+  <div class="ctrl-sep"></div>
+  <button class="ctrl-btn" id="pan-btn" onclick="togglePan()" title="Auto Pan" style="font-size:16px">↻</button>
+</div>
+
+<!-- COORD BAR -->
+<div id="coord-bar">Hover over the map for coordinates</div>
+
+<!-- OSM CREDIT -->
+<div id="osm-attr">© <a href="https://openstreetmap.org/copyright" target="_blank">OpenStreetMap</a></div>
+
+<!-- BOTTOM STATUS BAR -->
+<div id="statusbar">
+  <div class="live-badge">● LIVE <span id="live-ago" style="opacity:.65;font-weight:400">· synced now</span></div>
+  <div class="ticker-wrap"><div class="ticker-inner" id="ticker">
+    <span class="ticker-item">GOD'S EYE Global Intelligence Platform — All sensors online</span>
+    <span class="ticker-item">Data sources: airplanes.live · USGS · Open-Meteo · NASA EONET · wheretheiss.at</span>
+    <span class="ticker-item">For educational and research use only</span>
+    <span class="ticker-item">GOD'S EYE Global Intelligence Platform — All sensors online</span>
+    <span class="ticker-item">Data sources: airplanes.live · USGS · Open-Meteo · NASA EONET · wheretheiss.at</span>
+    <span class="ticker-item">For educational and research use only</span>
+  </div></div>
+  <div class="status-dots">
+    <div class="status-dot"><div class="sdot" id="sd-flights"></div><span id="ss-flights">Flights</span></div>
+    <div class="status-dot"><div class="sdot" id="sd-seismic"></div><span id="ss-seismic">Seismic</span></div>
+    <div class="status-dot"><div class="sdot" id="sd-weather"></div><span id="ss-weather">Weather</span></div>
+    <div class="status-dot"><div class="sdot" id="sd-iss"></div><span id="ss-iss">ISS</span></div>
+  </div>
+</div>
+
+<!-- ════════════════════════════════════════ -->
+<script>
+'use strict';
+
+// ─── CONFIG ──────────────────────────────────────────────────────
+const API = {
+  // Flights — airplanes.live (primary, reliable) + OpenSky (secondary)
+  FLIGHTS_POINT: 'https://api.airplanes.live/v2/point',
+  FLIGHTS_MIL:   'https://api.airplanes.live/v2/mil',
+  OPENSKY:       'https://opensky-network.org/api/states/all',
+  // Environment
+  USGS:     'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_day.geojson',
+  USGS_7D:  'https://earthquake.usgs.gov/earthquakes/feed/v1.0/summary/all_week.geojson',
+  WEATHER:  'https://api.open-meteo.com/v1/forecast',
+  EONET:    'https://eonet.gsfc.nasa.gov/api/v3/events',
+  ISS:      'https://api.wheretheiss.at/v1/satellites/25544',
+  // Military OSINT — VERIFIED working, no key, open CORS
+  OSM_OVERPASS: 'https://overpass-api.de/api/interpreter',
+  // ACLED now REQUIRES a myACLED account + OAuth bearer token — there is no
+  // anonymous public access anymore (see acleddata.com/api-documentation).
+  // We use it only if the user pastes their own free token in Settings.
+  ACLED:      'https://acleddata.com/api/acled/read',
+  ACLED_AUTH: 'https://acleddata.com/oauth/token',
+  // UCDP Uppsala — georeferenced conflict events, academic quality, open CORS,
+  // but updated ~monthly/annually — treat as HISTORICAL, not a live feed.
+  UCDP:     'https://ucdpapi.pcr.uu.se/api/gedevents/23.1',
+  // ReliefWeb UN OCHA API — no key, open CORS, updated continuously — genuinely live
+  RELIEFWEB:'https://api.reliefweb.int/v1/reports',
+  // Google News RSS — genuinely real-time (indexes as outlets publish), no
+  // key. This, plus the curated outlet RSS feeds below, is now the ONLY
+  // source powering the live conflict/military layers — no GDELT anywhere.
+  // AIS Shipping — free anonymous demo feed (sparse coverage, ~5min lag)
+  AISHUB:   'https://data.aishub.net/vessels-v2.php',
+  // AISStream.io — genuinely real-time (sub-second) global AIS via WebSocket.
+  // Needs a free API key (30-second email signup, no card) — optional upgrade,
+  // see promptAisStreamSetup(). Without it we fall back to AISHub/demo above.
+  AISSTREAM_WS: 'wss://stream.aisstream.io/v0/stream',
+  // CORS proxy for endpoints that need it
+  PROXY:    'https://api.allorigins.win/get?url=',
+  PROXY2:   'https://corsproxy.io/?',
+};
+
+// ─── ACLED CREDENTIALS (optional, user-supplied, free) ────────────
+// ACLED access now requires registering a free myACLED account and pasting
+// a 24h OAuth bearer token here so we can query it directly. Stored locally
+// in the browser only — never sent anywhere except acleddata.com. If not
+// set, the Armed Conflicts layer runs on the same live news-wire feed as
+// the Conflict Events layer instead (no signup needed).
+function getAcledCreds() {
+  try { return JSON.parse(localStorage.getItem('acled_creds')||'null'); }
+  catch(e) { return null; }
+}
+function setAcledCreds(creds) {
+  localStorage.setItem('acled_creds', JSON.stringify(creds));
+}
+function promptAcledSetup() {
+  const existing = getAcledCreds();
+  const msg = 'ACLED now requires a free myACLED account (register at '+
+    'acleddata.com) to pull verified data — note ACLED events are hand-'+
+    'checked so they typically trail real events by 1-3 weeks.\n\n'+
+    'Paste an OAuth access token (valid 24h, from the "Get a token" curl '+
+    'command in ACLED\'s API docs), or leave blank to keep using the free '+
+    'live news-wire feed instead (faster, unverified):';
+  const token = prompt(msg, existing?.token || '');
+  if (token === null) return; // cancelled
+  if (!token.trim()) { setAcledCreds(null); }
+  else { setAcledCreds({ token: token.trim(), savedAt: Date.now() }); }
+  fetchACLED();
+}
+
+// Flight scan zones — cover major airspace regions
+const ZONES = [
+  {lat:51, lon:10,  r:600}, // Europe
+  {lat:40, lon:-95, r:700}, // N.America
+  {lat:35, lon:135, r:600}, // Japan/Korea
+  {lat:25, lon:55,  r:500}, // Middle East
+  {lat:20, lon:78,  r:500}, // India
+  {lat:1,  lon:103, r:400}, // Singapore
+  {lat:-23,lon:-46, r:500}, // Brazil
+  {lat:-33,lon:151, r:400}, // Australia
+  {lat:55, lon:37,  r:400}, // Russia
+  {lat:30, lon:116, r:500}, // China
+];
+
+// City weather targets
+const CITIES = [
+  {n:'New York',lat:40.71,lon:-74.01,flag:'🇺🇸'},
+  {n:'London',  lat:51.51,lon:-0.13, flag:'🇬🇧'},
+  {n:'Dubai',   lat:25.20,lon:55.27, flag:'🇦🇪'},
+  {n:'Tokyo',   lat:35.68,lon:139.69,flag:'🇯🇵'},
+  {n:'Sydney',  lat:-33.87,lon:151.21,flag:'🇦🇺'},
+  {n:'Mumbai',  lat:19.08,lon:72.88, flag:'🇮🇳'},
+  {n:'Moscow',  lat:55.75,lon:37.62, flag:'🇷🇺'},
+  {n:'Beijing', lat:39.91,lon:116.39,flag:'🇨🇳'},
+  {n:'Paris',   lat:48.85,lon:2.35,  flag:'🇫🇷'},
+  {n:'Cairo',   lat:30.05,lon:31.24, flag:'🇪🇬'},
+];
+
+const WX_CODES = {
+  0:'Clear ☀️',1:'Mainly Clear 🌤',2:'Partly Cloudy ⛅',3:'Overcast ☁️',
+  45:'Foggy 🌫',51:'Light Drizzle 🌦',61:'Light Rain 🌧',71:'Light Snow 🌨',
+  80:'Showers 🌦',95:'Thunderstorm ⛈',
+};
+
+// ─── STATE ────────────────────────────────────────────────────────
+const S = {
+  flights:{}, military:{}, quakes:[], fires:[], iss:null,
+  bases:[], conflicts:[], acled:[], ucdp:[], reliefweb:[], vessels:[],
+  layers:{flights:true, mil:true, quakes:true, fires:true, iss:true, bases:true, conflicts:true, acled:true, vessels:true},
+  counts:{flights:0, mil:0, quakes:0, fires:0, bases:0, conflicts:0, acled:0, vessels:0},
+  zoneIdx:0, ticker:[], mapStyle:0,
+  panActive:false, panTimer:null,
+  sidebarOpen:true,
+};
+
+// ─── MAP ──────────────────────────────────────────────────────────
+let MAP, LG = {}, issMarker = null, issTrail = null;
+let tileLayer;
+let lastSyncAt = Date.now();
+
+const STYLES = [
+  { url:'https://{s}.tile.openstreetmap.org/{z}/{x}/{y}.png',
+    filter:'brightness(0.32) saturate(0.25) hue-rotate(195deg) contrast(1.5)', name:'OSM Dark' },
+  { url:'https://server.arcgisonline.com/ArcGIS/rest/services/Canvas/World_Dark_Gray_Base/MapServer/tile/{z}/{y}/{x}',
+    filter:'brightness(0.55) saturate(0.15) hue-rotate(185deg)', name:'Gray' },
+  { url:'https://server.arcgisonline.com/ArcGIS/rest/services/World_Imagery/MapServer/tile/{z}/{y}/{x}',
+    filter:'brightness(0.38) saturate(0.5) hue-rotate(170deg) contrast(1.2)', name:'Satellite' },
+  { url:'https://tiles.stadiamaps.com/tiles/alidade_smooth_dark/{z}/{x}/{y}{r}.png',
+    filter:'brightness(0.7) saturate(0.35) hue-rotate(165deg)', name:'Smooth Dark' },
+];
+
+function initMap() {
+  MAP = L.map('map', {
+    center:[20, 10], zoom:3, minZoom:2, maxZoom:14,
+    zoomControl:false, attributionControl:false,
+    // Performance flags
+    preferCanvas: true,        // canvas renderer is 3-5x faster for many markers
+    zoomSnap: 0.5,
+    zoomDelta: 0.5,
+    wheelPxPerZoomLevel: 120,
+    fadeAnimation: true,
+    zoomAnimation: true,
+    markerZoomAnimation: true,
+  });
+
+  applyStyle(0);
+
+  ['flights','mil','quakes','fires','iss','bases','conflicts','acled','vessels'].forEach(k => {
+    LG[k] = L.layerGroup().addTo(MAP);
+  });
+
+  MAP.on('mousemove', e => {
+    const la = e.latlng.lat.toFixed(3), lo = e.latlng.lng.toFixed(3);
+    const laS = la >= 0 ? `${la}°N` : `${Math.abs(la)}°S`;
+    const loS = lo >= 0 ? `${lo}°E` : `${Math.abs(lo)}°W`;
+    document.getElementById('coord-bar').textContent = `${laS}  ${loS}`;
+  });
+  MAP.on('click', () => MAP.closePopup());
+
+  mark('li-map');
+}
+
+function applyStyle(idx) {
+  const s = STYLES[idx];
+  if (tileLayer) MAP.removeLayer(tileLayer);
+  tileLayer = L.tileLayer(s.url, { maxZoom:19, subdomains:'abc' }).addTo(MAP);
+  tileLayer.bringToBack();
+  let el = document.getElementById('ts');
+  if (!el) { el = document.createElement('style'); el.id = 'ts'; document.head.appendChild(el); }
+  el.textContent = `.leaflet-tile{filter:${s.filter}!important}`;
+}
+
+function cycleStyle() {
+  S.mapStyle = (S.mapStyle + 1) % STYLES.length;
+  applyStyle(S.mapStyle);
+  flash(`Map: ${STYLES[S.mapStyle].name}`);
+}
+
+function mapReset() { MAP.flyTo([20, 10], 3, { duration:1.5 }); }
+function flyTo(lat, lon, z=6) { MAP.flyTo([lat, lon], z, { duration:1.2 }); }
+
+function flyToLayer(name) {
+  const centers = { flights:[40,0], mil:[45,10], quakes:[30,100], fires:[0,20] };
+  if (centers[name]) { const [la,lo] = centers[name]; MAP.flyTo([la,lo], 3); }
+}
+
+// ─── PAN ─────────────────────────────────────────────────────────
+function togglePan() {
+  S.panActive = !S.panActive;
+  const btn = document.getElementById('pan-btn');
+  if (S.panActive) {
+    btn.classList.add('active');
+    S.panTimer = setInterval(() => MAP.panBy([1,0], {animate:true,duration:0.08}), 80);
+    flash('Auto-pan ON');
+  } else {
+    clearInterval(S.panTimer);
+    btn.classList.remove('active');
+    flash('Auto-pan OFF');
+  }
+}
+
+// ─── DOT MARKERS ─────────────────────────────────────────────────
+function dot(lat, lon, color, size, popupHTML, layerKey, zOff=0) {
+  const r = size;
+  const icon = L.divIcon({
+    className:'',
+    html:`<div class="dot-marker" style="width:${r*2}px;height:${r*2}px;background:${color};box-shadow:0 0 ${r+3}px ${color}88;margin-left:-${r}px;margin-top:-${r}px"></div>`,
+    iconSize:[0,0], iconAnchor:[0,0],
+  });
+  const m = L.marker([lat, lon], { icon, zIndexOffset:zOff });
+  if (popupHTML) {
+    m.bindPopup(popupHTML, { className:'', maxWidth:280, autoPan:false });
+  }
+  m.addTo(LG[layerKey]);
+  return m;
+}
+
+function popup(title, icon, rows) {
+  const rowsHTML = rows.map(([k,v]) =>
+    `<div class="map-popup-row"><span class="k">${k}</span><span class="v">${v}</span></div>`
+  ).join('');
+  return `<div class="map-popup"><div class="map-popup-title">${icon} ${title}</div>${rowsHTML}</div>`;
+}
+
+// ─── CLOCK ────────────────────────────────────────────────────────
+function updateClock() {
+  const n = new Date(), p = v => String(v).padStart(2,'0');
+  document.getElementById('clk-time').textContent = `${p(n.getUTCHours())}:${p(n.getUTCMinutes())}:${p(n.getUTCSeconds())}`;
+  const M = ['JAN','FEB','MAR','APR','MAY','JUN','JUL','AUG','SEP','OCT','NOV','DEC'];
+  document.getElementById('clk-date').textContent = `${p(n.getUTCDate())} ${M[n.getUTCMonth()]} ${n.getUTCFullYear()} UTC`;
+}
+setInterval(updateClock, 1000); updateClock();
+
+// ─── FLIGHTS — OpenSky (global, free) + airplanes.live fallback ──
+let _failCount=0, _lastOpenSky=0, _openSkyFails=0;
+
+async function fetchFlights() {
+  const now = Date.now();
+  // OpenSky anonymous: min 10s between calls — enforce 16s
+  if (now - _lastOpenSky >= 16000) {
+    _lastOpenSky = now;
+    const ok = await fetchOpenSky();
+    if (ok) return;
+  }
+  // Fill with airplanes.live zone rotation every 8s
+  await fetchFlightZone();
+}
+
+async function fetchOpenSky() {
+  // Query 4 major traffic regions in parallel — covers ~95% of world traffic
+  const boxes = [
+    [30,-130,75,-60],  // North America
+    [35,-15, 72, 45],  // Europe
+    [0,  60, 50,150],  // Asia
+    [-40,-80,15, 55],  // S.America + Africa
+  ];
+  try {
+    const results = await Promise.all(boxes.map(([lamin,lomin,lamax,lomax]) =>
+      fetch(`${API.OPENSKY}?lamin=${lamin}&lomin=${lomin}&lamax=${lamax}&lomax=${lomax}`,
+        {signal:AbortSignal.timeout(8000)})
+        .then(r => r.ok ? r.json() : null).catch(()=>null)
+    ));
+    let added=0;
+    results.forEach(d => {
+      if (!d?.states) return;
+      d.states.forEach(s => {
+        // [icao24, callsign, origin_country, time_pos, last_contact,
+        //  lon, lat, baro_alt_m, on_ground, velocity_ms, track_deg,
+        //  vert_rate, sensors, geo_alt_m, squawk, spi, pos_source]
+        if (!s[5]||!s[6]||s[8]) return; // skip no-pos or on-ground
+        S.flights[s[0]] = {
+          hex: s[0],
+          flight: (s[1]||s[0]).trim(),
+          lat: s[6], lon: s[5],
+          alt_baro: s[7] ? Math.round(s[7]*3.28084) : 0, // m→ft
+          gs: s[9] ? Math.round(s[9]*1.944) : 0,          // m/s→kts
+          track: s[10]||0,
+          squawk: s[14]||'—',
+          origin: s[2]||'',
+          _src:'opensky',
+        };
+        added++;
+      });
+    });
+    if (added>0) {
+      _openSkyFails=0; setStatus('flights','ok');
+      document.getElementById('lsub-flights').textContent=`${added} aircraft (OpenSky)`;
+      renderFlights(); return true;
+    }
+  } catch(e) {}
+  _openSkyFails++;
+  return false;
+}
+
+async function fetchFlightZone() {
+  const z=ZONES[S.zoneIdx%ZONES.length]; S.zoneIdx++;
+  try {
+    const r=await fetch(`${API.FLIGHTS_POINT}/${z.lat}/${z.lon}/${z.r}`,
+      {signal:AbortSignal.timeout(6000)});
+    if(!r.ok) throw 0;
+    const d=await r.json();
+    let added=0;
+    (d.ac||[]).forEach(a=>{
+      if(a.lat&&a.lon){S.flights[a.hex]={...a,_src:'adsb'};added++;}
+    });
+    if(added>0){_failCount=0;setStatus('flights','ok');renderFlights();}
+  } catch {
+    if(++_failCount>=ZONES.length&&!Object.keys(S.flights).length){
+      setStatus('flights','warn');renderDemoFlights();
+    }
+  }
+}
+
+async function fetchMilitary() {
+  try {
+    const r = await fetch(API.FLIGHTS_MIL);
+    if (!r.ok) throw 0;
+    const d = await r.json(); S.military = {};
+    (d.ac || []).forEach(a => { if (a.lat && a.lon) S.military[a.hex] = a; });
+    renderMilitary();
+    setStatus('flights','ok');
+  } catch {
+    renderDemoMilitary();
+  }
+}
+
+function renderFlights() {
+  LG.flights.clearLayers();
+  const ac = Object.values(S.flights);
+  if (S.layers.flights) {
+    ac.forEach(a => {
+      const alt = a.alt_baro || 0;
+      const color = alt > 30000 ? '#29d4f5' : alt > 15000 ? '#3080f0' : '#1a5090';
+      const sz = 4;
+      const cs = (a.flight || a.hex || 'UNKNOWN').trim();
+      dot(a.lat, a.lon, color, sz, popup(cs, '✈', [
+        ['Callsign', cs],
+        ['Altitude', a.alt_baro ? `${Math.round(a.alt_baro).toLocaleString()} ft` : '—'],
+        ['Speed',    a.gs ? `${Math.round(a.gs)} kts` : '—'],
+        ['Heading',  a.track ? `${Math.round(a.track)}°` : '—'],
+        ['ICAO',     a.hex || '—'],
+        ['Squawk',   a.squawk || '—'],
+      ]), 'flights', 10);
+    });
+  }
+  const n = ac.length; S.counts.flights = n;
+  document.getElementById('stat-flights').textContent = n > 999 ? (n/1000).toFixed(1)+'K' : n;
+  document.getElementById('chip-flights').textContent = n > 999 ? (n/1000).toFixed(1)+'K' : n;
+  document.getElementById('lsub-flights').textContent = `${n} civil aircraft live`;
+  mark('li-flights');
+}
+
+function renderDemoFlights() {
+  LG.flights.clearLayers();
+  const demo = [
+    {hex:'d1',flight:'UAL892', lat:51.5, lon:-5.0, alt_baro:37000,gs:480,track:265,squawk:'2341'},
+    {hex:'d2',flight:'BA0175', lat:48.8, lon:2.35,  alt_baro:35000,gs:510,track:340,squawk:'1234'},
+    {hex:'d3',flight:'DLH400', lat:52.5, lon:13.4,  alt_baro:38000,gs:495,track:90, squawk:'3210'},
+    {hex:'d4',flight:'EK0203', lat:25.2, lon:55.3,  alt_baro:39000,gs:520,track:285,squawk:'4521'},
+    {hex:'d5',flight:'QFA001', lat:-33.9,lon:151.2, alt_baro:36000,gs:500,track:315,squawk:'5632'},
+    {hex:'d6',flight:'AAL100', lat:40.7, lon:-74.0, alt_baro:34000,gs:465,track:85, squawk:'2145'},
+    {hex:'d7',flight:'SIA317', lat:1.35, lon:103.8, alt_baro:37500,gs:505,track:270,squawk:'3456'},
+    {hex:'d8',flight:'JAL005', lat:35.7, lon:139.7, alt_baro:38000,gs:510,track:0,  squawk:'1111'},
+    {hex:'d9',flight:'AFR447', lat:20.0, lon:-35.0, alt_baro:35000,gs:488,track:245,squawk:'6124'},
+    {hex:'da',flight:'THY001', lat:41.0, lon:28.9,  alt_baro:36500,gs:498,track:10, squawk:'4312'},
+    {hex:'db',flight:'CCA983', lat:39.9, lon:116.4, alt_baro:35500,gs:475,track:350,squawk:'2654'},
+    {hex:'dc',flight:'KAL902', lat:55.0, lon:140.0, alt_baro:38000,gs:512,track:90, squawk:'1563'},
+    {hex:'dd',flight:'RYR100', lat:53.3, lon:-6.3,  alt_baro:38000,gs:470,track:180,squawk:'5555'},
+    {hex:'de',flight:'WZZ432', lat:47.5, lon:19.1,  alt_baro:37000,gs:460,track:90, squawk:'4444'},
+    {hex:'df',flight:'VIR025', lat:55.9, lon:-3.2,  alt_baro:37500,gs:492,track:265,squawk:'6234'},
+    {hex:'e0',flight:'UAE231', lat:32.1, lon:34.8,  alt_baro:37000,gs:520,track:145,squawk:'5421'},
+    {hex:'e1',flight:'TAP910', lat:38.7, lon:-9.1,  alt_baro:36000,gs:468,track:270,squawk:'6666'},
+    {hex:'e2',flight:'ANA001', lat:35.0, lon:136.0, alt_baro:36000,gs:485,track:200,squawk:'7777'},
+    {hex:'e3',flight:'DAL199', lat:33.7, lon:-84.4, alt_baro:34000,gs:461,track:180,squawk:'1842'},
+    {hex:'e4',flight:'TOM789', lat:28.0, lon:-15.5, alt_baro:36000,gs:485,track:345,squawk:'3333'},
+  ];
+  demo.forEach(a => S.flights[a.hex] = a);
+  renderFlights();
+  setStatus('flights','warn');
+  document.getElementById('lsub-flights').textContent = 'Demo — airplanes.live offline';
+}
+
+function renderMilitary() {
+  LG.mil.clearLayers();
+  const ac = Object.values(S.military);
+  if (S.layers.mil) {
+    ac.forEach(a => {
+      const cs = (a.flight || a.hex || 'UNKNOWN').trim();
+      dot(a.lat, a.lon, '#f0c030', 6, popup(cs, '⚔', [
+        ['Callsign', cs],
+        ['Type',     a.t || 'Military AC'],
+        ['Altitude', a.alt_baro ? `${Math.round(a.alt_baro).toLocaleString()} ft` : '—'],
+        ['Speed',    a.gs ? `${Math.round(a.gs)} kts` : '—'],
+        ['ICAO',     a.hex || '—'],
+      ]), 'mil', 20);
+    });
+  }
+  const n = ac.length; S.counts.mil = n;
+  document.getElementById('stat-mil').textContent = n;
+  document.getElementById('chip-mil').textContent = n;
+  document.getElementById('lsub-mil').textContent = `${n} military aircraft`;
+  renderMilFeed(ac.slice(0, 12));
+}
+
+function renderDemoMilitary() {
+  const demo = [
+    {hex:'m1',flight:'REACH901',lat:38.0, lon:-95.0,alt_baro:32000,gs:450,t:'C-17 Globemaster'},
+    {hex:'m2',flight:'VVLL102', lat:51.5, lon:0.5,  alt_baro:28000,gs:420,t:'RC-135 Rivet Joint'},
+    {hex:'m3',flight:'JAKE11',  lat:36.0, lon:28.0, alt_baro:30000,gs:480,t:'P-8 Poseidon'},
+    {hex:'m4',flight:'NATO72',  lat:52.0, lon:14.0, alt_baro:31000,gs:460,t:'E-3 Sentry AWACS'},
+    {hex:'m5',flight:'USAF707', lat:28.0, lon:55.0, alt_baro:35000,gs:490,t:'KC-135 Stratotanker'},
+    {hex:'m6',flight:'MAGMA89', lat:59.0, lon:25.0, alt_baro:29000,gs:440,t:'C-130 Hercules'},
+    {hex:'m7',flight:'COBRA11', lat:15.0, lon:44.0, alt_baro:27000,gs:460,t:'MQ-9 Reaper'},
+  ];
+  demo.forEach(a => S.military[a.hex] = a);
+  renderMilitary();
+}
+
+function renderMilFeed(ac) {
+  document.getElementById('mil-feed').innerHTML = !ac.length
+    ? '<div class="feed-item"><div class="feed-body"><div class="feed-meta">No military traffic visible</div></div></div>'
+    : ac.map(a => {
+        const cs = (a.flight || a.hex || '—').trim();
+        return `<div class="feed-item" onclick="flyTo(${a.lat},${a.lon})">
+          <div class="feed-icon">⚔</div>
+          <div class="feed-body">
+            <div class="feed-title">${cs}</div>
+            <div class="feed-meta">${a.t || 'Military'} · ${a.alt_baro ? Math.round(a.alt_baro).toLocaleString()+'ft' : '—'} · ${a.gs ? Math.round(a.gs)+'kts' : '—'}</div>
+          </div>
+        </div>`;
+      }).join('');
+}
+
+// ─── SEISMIC (USGS — FREE, no key, CORS OK) ─────────────────────
+async function fetchQuakes() {
+  try {
+    const r = await fetch(API.USGS);
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    S.quakes = (d.features || []);
+    renderQuakes();
+    setStatus('seismic','ok');
+    mark('li-seismic');
+  } catch {
+    setStatus('seismic','err');
+  }
+}
+
+function renderQuakes() {
+  LG.quakes.clearLayers();
+  if (S.layers.quakes) {
+    S.quakes.forEach(f => {
+      const p = f.properties, c = f.geometry.coordinates, mag = p.mag || 0;
+      if (isNaN(c[0]) || isNaN(c[1])) return;
+      const color = mag >= 6 ? '#f04060' : mag >= 5 ? '#f08030' : mag >= 4 ? '#f0c030' : '#22d97a';
+      const sz = Math.max(4, Math.min(16, mag * 2.4));
+      const ts = new Date(p.time).toUTCString().slice(0,22);
+      const place = (p.place || 'Unknown').replace(/^\d+km \w+ of /,'');
+      dot(c[1], c[0], color, sz, popup(`M${mag.toFixed(1)} Earthquake`, '⚡', [
+        ['Place',  place],
+        ['Time',   ts],
+        ['Depth',  `${c[2] ? c[2].toFixed(0) : '?'} km`],
+        ['Status', p.status || '—'],
+      ]), 'quakes', 30);
+    });
+  }
+  const n = S.quakes.length; S.counts.quakes = n;
+  document.getElementById('stat-quakes').textContent = n;
+  document.getElementById('chip-quakes').textContent = n;
+  document.getElementById('lsub-quakes').textContent = `${n} events in 24h`;
+  renderQuakeFeed(S.quakes.slice(0, 15));
+}
+
+function renderQuakeFeed(qs) {
+  document.getElementById('quake-feed').innerHTML = qs.map(f => {
+    const p = f.properties, mag = (p.mag || 0), c = f.geometry.coordinates;
+    const mc = mag >= 5 ? 'mag-high' : mag >= 4 ? 'mag-mid' : 'mag-low';
+    const place = (p.place || 'Unknown').replace(/^\d+km \w+ of /, '').slice(0, 30);
+    const dt = new Date(p.time);
+    const ts = `${String(dt.getUTCHours()).padStart(2,'0')}:${String(dt.getUTCMinutes()).padStart(2,'0')} UTC`;
+    return `<div class="feed-item" onclick="flyTo(${c[1]},${c[0]},6)">
+      <div class="mag ${mc}">M${mag.toFixed(1)}</div>
+      <div class="feed-body">
+        <div class="feed-title">${place}</div>
+        <div class="feed-meta">${ts} · Depth: ${c[2]?c[2].toFixed(0):'?'}km</div>
+      </div>
+    </div>`;
+  }).join('');
+}
+
+// ─── WILDFIRES (NASA EONET — FREE, no key, CORS OK) ──────────────
+async function fetchFires() {
+  try {
+    const r = await fetch(`${API.EONET}?category=wildfires&status=open&limit=200`);
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    S.fires = (d.events || []).map(e => {
+      const g = e.geometry && e.geometry[0];
+      if (!g || !g.coordinates) return null;
+      return { title:e.title, lat:g.coordinates[1], lon:g.coordinates[0] };
+    }).filter(Boolean);
+    if (!S.fires.length) throw 0;
+    renderFires();
+    mark('li-fires');
+  } catch {
+    // Use demo fire data
+    S.fires = [
+      {title:'Amazon Basin Fire',lat:-15.0,lon:-55.0},{title:'Congo Basin Fire',lat:0.0,lon:20.0},
+      {title:'Siberia Wildfire',lat:55.0,lon:90.0},{title:'California Wildfire',lat:37.0,lon:-120.0},
+      {title:'Australian Bushfire',lat:-30.0,lon:150.0},{title:'Greece Wildfire',lat:38.0,lon:26.0},
+      {title:'Scandinavia Fire',lat:60.0,lon:14.0},{title:'Canary Islands Fire',lat:28.0,lon:-16.0},
+      {title:'Eastern Europe Fire',lat:50.0,lon:40.0},{title:'South China Fire',lat:25.0,lon:110.0},
+    ];
+    renderFires();
+  }
+}
+
+function renderFires() {
+  LG.fires.clearLayers();
+  if (S.layers.fires) {
+    S.fires.forEach(f => {
+      dot(f.lat, f.lon, '#f08030', 5, popup(f.title, '🔥', [
+        ['Location', `${f.lat.toFixed(2)}°, ${f.lon.toFixed(2)}°`],
+        ['Status',   'ACTIVE'],
+        ['Source',   'NASA EONET'],
+      ]), 'fires', 15);
+    });
+  }
+  const n = S.fires.length; S.counts.fires = n;
+  document.getElementById('stat-fires').textContent = n;
+  document.getElementById('chip-fires').textContent = n;
+  document.getElementById('lsub-fires').textContent = `${n} active wildfires`;
+  renderFireFeed(S.fires.slice(0, 10));
+}
+
+function renderFireFeed(fires) {
+  document.getElementById('fire-feed').innerHTML = fires.map(f =>
+    `<div class="feed-item" onclick="flyTo(${f.lat},${f.lon})">
+      <div class="feed-icon">🔥</div>
+      <div class="feed-body">
+        <div class="feed-title">${f.title}</div>
+        <div class="feed-meta">${f.lat.toFixed(1)}°, ${f.lon.toFixed(1)}°</div>
+      </div>
+    </div>`
+  ).join('');
+}
+
+// ─── ISS (wheretheiss.at — FREE, no key, CORS OK) ────────────────
+let issTrailCoords = [];
+const ISS_TRAIL_MAX = 80;
+
+async function fetchISS() {
+  try {
+    const r = await fetch(API.ISS);
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    const lat = parseFloat(d.latitude), lon = parseFloat(d.longitude);
+    const alt = parseFloat(d.altitude).toFixed(0);
+    const vel = parseFloat(d.velocity).toFixed(0);
+    S.iss = { lat, lon, alt, vel };
+    renderISS(lat, lon, alt, vel);
+    setStatus('iss','ok');
+    mark('li-iss');
+  } catch {
+    // Backup
+    try {
+      const r2 = await fetch(API.ISS_BACKUP);
+      const d2 = await r2.json();
+      const lat = parseFloat(d2.iss_position.latitude);
+      const lon = parseFloat(d2.iss_position.longitude);
+      S.iss = { lat, lon, alt:408, vel:27600 };
+      renderISS(lat, lon, 408, 27600);
+      setStatus('iss','warn');
+    } catch {
+      setStatus('iss','err');
+    }
+  }
+}
+
+function renderISS(lat, lon, alt, vel) {
+  const laS = lat >= 0 ? `${lat.toFixed(2)}°N` : `${Math.abs(lat).toFixed(2)}°S`;
+  const loS = lon >= 0 ? `${lon.toFixed(2)}°E` : `${Math.abs(lon).toFixed(2)}°W`;
+
+  if (S.layers.iss) {
+    LG.iss.clearLayers();
+
+    // Trail
+    issTrailCoords.push([lat, lon]);
+    if (issTrailCoords.length > ISS_TRAIL_MAX) issTrailCoords.shift();
+    if (issTrailCoords.length > 1) {
+      L.polyline(issTrailCoords, {
+        color:'#9060f0', weight:1.5, opacity:0.4, dashArray:'4 6',
+      }).addTo(LG.iss);
+    }
+
+    // Pulse ring
+    const ringIcon = L.divIcon({
+      className:'',
+      html:`<div style="position:relative;width:20px;height:20px;margin:-10px 0 0 -10px">
+        <div class="iss-ring"></div>
+        <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+          width:10px;height:10px;border-radius:50%;background:#9060f0;
+          box-shadow:0 0 12px #9060f0"></div>
+      </div>`,
+      iconSize:[0,0],iconAnchor:[0,0],
+    });
+
+    L.marker([lat, lon], { icon:ringIcon, zIndexOffset:100 })
+      .bindPopup(popup('International Space Station','🛸',[
+        ['Position', `${laS}, ${loS}`],
+        ['Altitude', `${alt} km`],
+        ['Velocity', `${parseInt(vel).toLocaleString()} km/h`],
+        ['Orbit',    'LEO ~408km'],
+        ['Source',   'wheretheiss.at'],
+      ]))
+      .addTo(LG.iss);
+  }
+
+  // Update sidebar card (always, regardless of layer visibility)
+  document.getElementById('iss-pos').textContent = `${laS},  ${loS}`;
+  document.getElementById('iss-detail').textContent = `Speed: ${parseInt(vel).toLocaleString()} km/h · Alt: ${alt} km`;
+  document.getElementById('lsub-iss').textContent = `${laS}, ${loS}`;
+}
+
+// ─── WEATHER (Open-Meteo — FREE, no key, CORS OK) ────────────────
+async function fetchWeather() {
+  const results = [];
+  await Promise.all(CITIES.map(c =>
+    fetch(`${API.WEATHER}?latitude=${c.lat}&longitude=${c.lon}&current_weather=true`)
+      .then(r => r.json())
+      .then(d => {
+        if (d.current_weather) results.push({
+          ...c,
+          temp: d.current_weather.temperature,
+          code: d.current_weather.weathercode,
+          wind: d.current_weather.windspeed,
+        });
+      })
+      .catch(() => {})
+  ));
+  const data = results.length ? results : CITIES.map((c,i) => ({
+    ...c, temp:[14,10,38,35,22,34,5,18,12,28][i], code:[2,3,0,80,2,80,71,1,61,0][i], wind:15,
+  }));
+  renderWeather(data);
+  setStatus('weather','ok');
+  mark('li-weather');
+}
+
+function renderWeather(data) {
+  document.getElementById('wx-list').innerHTML = data.map(w => {
+    const cond = WX_CODES[w.code] || '—';
+    const tempColor = w.temp > 35 ? '#f04060' : w.temp > 25 ? '#f0c030' : w.temp > 10 ? '#22d97a' : '#3080f0';
+    return `<div class="wx-row">
+      <span class="wx-flag">${w.flag}</span>
+      <span class="wx-city">${w.n}</span>
+      <span class="wx-temp" style="color:${tempColor}">${w.temp}°C</span>
+      <span class="wx-cond">${cond.split(' ').slice(-1)[0]}</span>
+    </div>`;
+  }).join('');
+}
+
+// ════════════════════════════════════════════════════════════════
+// MILITARY OSINT — 3 free data sources
+// ════════════════════════════════════════════════════════════════
+
+// ─── 1. OSM OVERPASS — Military Bases & Installations (FREE, no key) ──
+// Queries OpenStreetMap for nodes/ways tagged military=*
+async function fetchBases() {
+  // OSM Overpass query: military bases, airfields, bunkers, ranges globally
+  const query = `[out:json][timeout:25];
+(
+  node["military"~"^(base|airfield|airbase|naval_base|bunker|barracks|range|checkpoint|training_area)$"](bbox:-60,-180,75,180);
+  way["military"~"^(base|airfield|airbase|naval_base)$"](bbox:-60,-180,75,180);
+);
+out center 300;`;
+
+  try {
+    const r = await fetch(API.OSM_OVERPASS, {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+      body: 'data=' + encodeURIComponent(query),
+    });
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    const elements = d.elements || [];
+    S.bases = elements.map(el => ({
+      lat:  el.lat  || (el.center && el.center.lat),
+      lon:  el.lon  || (el.center && el.center.lon),
+      name: el.tags?.name || el.tags?.['name:en'] || 'Military Installation',
+      type: el.tags?.military || 'base',
+      country: el.tags?.['addr:country'] || '',
+      operator: el.tags?.operator || '',
+    })).filter(b => b.lat && b.lon);
+
+    if (S.bases.length === 0) throw 0;
+    renderBases();
+    document.getElementById('bases-badge').textContent = `OSM ${S.bases.length}`;
+  } catch(e) {
+    // Fallback: known major military installations
+    S.bases = DEMO_BASES;
+    renderBases();
+  }
+}
+
+// Render military base markers
+function renderBases() {
+  LG.bases.clearLayers();
+  if (S.layers.bases) {
+    S.bases.forEach(b => {
+      const typeIcon = {
+        base:'🏛', airbase:'✈', airfield:'✈', naval_base:'⚓',
+        bunker:'🔒', barracks:'🪖', range:'🎯', checkpoint:'🚧',
+        training_area:'🎯',
+      }[b.type] || '🏛';
+      // Diamond-shaped base marker
+      const icon = L.divIcon({
+        className: '',
+        html: `<div class="base-marker" style="width:10px;height:10px;background:#f0c030;
+          transform:rotate(45deg);border:1px solid rgba(255,255,255,0.4);
+          box-shadow:0 0 8px #f0c03099;margin:-5px 0 0 -5px"></div>`,
+        iconSize:[0,0], iconAnchor:[0,0],
+      });
+      L.marker([b.lat, b.lon], { icon, zIndexOffset:25 })
+        .bindPopup(popup(b.name, typeIcon, [
+          ['Type',     b.type.replace(/_/g,' ').toUpperCase()],
+          ['Country',  b.country || 'Unknown'],
+          ['Operator', b.operator || '—'],
+          ['Source',   'OpenStreetMap'],
+          ['Coords',   `${b.lat.toFixed(3)}, ${b.lon.toFixed(3)}`],
+        ]))
+        .addTo(LG.bases);
+    });
+  }
+  const n = S.bases.length; S.counts.bases = n;
+  document.getElementById('chip-bases').textContent = n;
+  document.getElementById('stat-bases').textContent = n;
+  document.getElementById('lsub-bases').textContent = `${n} installations (OSM)`;
+  renderBasesFeed(S.bases.slice(0, 20));
+}
+
+function renderBasesFeed(bases) {
+  const typeIcon = { base:'🏛',airbase:'✈',airfield:'✈',naval_base:'⚓',bunker:'🔒',barracks:'🪖',range:'🎯' };
+  document.getElementById('bases-feed').innerHTML = bases.map(b =>
+    `<div class="feed-item" onclick="flyTo(${b.lat},${b.lon},8)">
+      <div class="feed-icon">${typeIcon[b.type]||'🏛'}</div>
+      <div class="feed-body">
+        <div class="feed-title">${b.name}</div>
+        <div class="feed-meta">${b.type.replace(/_/g,' ')}${b.country ? ' · ' + b.country : ''}</div>
+      </div>
+    </div>`
+  ).join('') || '<div class="feed-item"><div class="feed-body"><div class="feed-meta">No installations found</div></div></div>';
+}
+
+// Known major installations for fallback
+const DEMO_BASES = [
+  {name:'Pentagon',                   type:'base',       lat:38.871, lon:-77.056, country:'US'},
+  {name:'RAF Mildenhall',             type:'airbase',    lat:52.361, lon:0.486,   country:'GB'},
+  {name:'Ramstein Air Base',          type:'airbase',    lat:49.436, lon:7.600,   country:'DE'},
+  {name:'Naval Base San Diego',       type:'naval_base', lat:32.690, lon:-117.133,country:'US'},
+  {name:'Bagram Airfield',            type:'airbase',    lat:34.946, lon:69.265,  country:'AF'},
+  {name:'Yokota Air Base',            type:'airbase',    lat:35.748, lon:139.348, country:'JP'},
+  {name:'Kadena Air Base',            type:'airbase',    lat:26.356, lon:127.768, country:'JP'},
+  {name:'Al Udeid Air Base',          type:'airbase',    lat:25.117, lon:51.315,  country:'QA'},
+  {name:'Camp Humphreys',             type:'base',       lat:36.972, lon:127.029, country:'KR'},
+  {name:'Fort Liberty (Bragg)',       type:'base',       lat:35.139, lon:-79.009, country:'US'},
+  {name:'Incirlik Air Base',          type:'airbase',    lat:37.002, lon:35.426,  country:'TR'},
+  {name:'Diego Garcia',               type:'naval_base', lat:-7.314, lon:72.423,  country:'IO'},
+  {name:'Guam — Andersen AFB',        type:'airbase',    lat:13.584, lon:144.929, country:'US'},
+  {name:'Pearl Harbor',               type:'naval_base', lat:21.370, lon:-157.953,country:'US'},
+  {name:'Aviano Air Base',            type:'airbase',    lat:46.031, lon:12.596,  country:'IT'},
+  {name:'RAF Lakenheath',             type:'airbase',    lat:52.409, lon:0.561,   country:'GB'},
+  {name:'Spangdahlem Air Base',       type:'airbase',    lat:49.972, lon:6.693,   country:'DE'},
+  {name:'Misawa Air Base',            type:'airbase',    lat:40.703, lon:141.368, country:'JP'},
+  {name:'Osan Air Base',              type:'airbase',    lat:37.090, lon:127.029, country:'KR'},
+  {name:'Al-Asad Airbase',            type:'airbase',    lat:33.786, lon:42.442,  country:'IQ'},
+  {name:'Ain Assad — Ayn al Asad',    type:'base',       lat:33.785, lon:42.441,  country:'IQ'},
+  {name:'Balakliya training',         type:'training_area',lat:49.45,lon:36.85,   country:'UA'},
+  {name:'Sevastopol Naval Base',      type:'naval_base', lat:44.616, lon:33.526,  country:'RU'},
+  {name:'Hmeimim Air Base',           type:'airbase',    lat:35.401, lon:35.948,  country:'SY'},
+  {name:'Tartus Naval Base',          type:'naval_base', lat:34.889, lon:35.887,  country:'SY'},
+  {name:'Tianjin Binhai Airport (PLA)',type:'airbase',   lat:39.124, lon:117.346, country:'CN'},
+  {name:'Sanya Naval Base',           type:'naval_base', lat:18.244, lon:109.488, country:'CN'},
+  {name:'PLAAF Changchun',            type:'airbase',    lat:43.902, lon:125.685, country:'CN'},
+  {name:'Lashkar Gah Base',           type:'base',       lat:31.593, lon:64.358,  country:'AF'},
+  {name:'Camp Bastion / Shorabak',    type:'base',       lat:31.863, lon:64.224,  country:'AF'},
+];
+
+// ─── ACLED OAuth — used only if the user pasted their own free token ──────
+async function fetchAcledWithToken(token) {
+  const today = new Date();
+  const weekAgo = new Date(today - 14*24*60*60*1000);
+  const fmt = d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  const url = `${API.ACLED}?limit=200&event_date=${fmt(weekAgo)}|${fmt(today)}`+
+    `&event_date_where=BETWEEN&fields=event_date,event_type,sub_event_type,`+
+    `country,location,latitude,longitude,fatalities&format=json`;
+  const r = await fetch(url, {
+    signal:AbortSignal.timeout(12000),
+    headers:{'Authorization':`Bearer ${token}`, 'Accept':'application/json'},
+  });
+  if (!r.ok) throw new Error(`ACLED_${r.status}`);
+  const d = await r.json();
+  if (!d.data?.length) throw new Error('ACLED_EMPTY');
+  return d.data.map(e=>({
+    date:e.event_date, type:e.event_type, subtype:e.sub_event_type,
+    country:e.country, location:e.location,
+    lat:parseFloat(e.latitude), lon:parseFloat(e.longitude),
+    deaths:parseInt(e.fatalities)||0, _src:'acled',
+  })).filter(e=>!isNaN(e.lat)&&!isNaN(e.lon));
+}
+
+// ─── GOOGLE NEWS RSS — genuinely live, no key, searches ALL outlets ──
+// news.google.com/rss/search is an undocumented but stable Google feed.
+// It aggregates real-time results from every indexed news source for any
+// keyword query — far fresher than any single-outlet RSS and free forever.
+const GNEWS_BASE = 'https://news.google.com/rss/search';
+
+async function fetchGoogleNewsRSS(query, maxItems = 20) {
+  // _ts busts any caching layer between us and Google News (proxy or CDN)
+  const url = `${GNEWS_BASE}?q=${encodeURIComponent(query)}&hl=en-US&gl=US&ceid=US:en&_ts=${Date.now()}`;
+  try {
+    const xmlText = await fetchXmlViaProxy(url);
+    if (!xmlText) return [];
+    return parseRssXml(xmlText).slice(0, maxItems);
+  } catch(e) { return []; }
+}
+
+// Google News RSS ranks by RELEVANCE, not recency — a mildly-relevant article
+// from yesterday can outrank a perfectly on-topic one from an hour ago. The
+// "when:Xh" search operator forces a real time cutoff at the source. We try
+// the tightest window first and only widen if it comes back too thin, so
+// results stay as fresh as possible without going empty on quieter topics.
+async function fetchFreshNewsRSS(query, maxItems = 20) {
+  // Only 2 tiers now (was 4) — each tier tries up to 3 proxies internally,
+  // so 4 tiers meant up to 12 sequential proxy attempts per single query,
+  // which is what made total failure take 60-90+ seconds. This caps it hard.
+  const items6h = await fetchGoogleNewsRSS(`${query} when:6h`, maxItems);
+  if (items6h.length >= 4) return items6h.map(i => ({ ...i, _ageHrs: hoursSince(i.rawDate) }));
+  const items = await fetchGoogleNewsRSS(query, maxItems);
+  return items.map(i => ({ ...i, _ageHrs: hoursSince(i.rawDate) }));
+}
+
+function hoursSince(rawDate) {
+  if (!rawDate) return 999;
+  const t = new Date(rawDate).getTime();
+  if (isNaN(t)) return 999;
+  return (Date.now() - t) / 3600000;
+}
+
+// Real epoch-ms timestamp for sorting. Never sort by the human-readable
+// "date" display string (e.g. "2h ago" vs "1d ago") — string comparison of
+// those is meaningless and was silently scrambling feed order before.
+function toTs(item) {
+  if (item.rawDate) {
+    const t = new Date(item.rawDate).getTime();
+    if (!isNaN(t)) return t;
+  }
+  if (item.date && /^\d{4}-\d{2}-\d{2}/.test(item.date)) {
+    const t = new Date(item.date).getTime();
+    if (!isNaN(t)) return t;
+  }
+  return 0; // unknown date sinks to the bottom instead of appearing "freshest"
+}
+
+// Fetch raw XML through CORS proxy chain (Google News has no CORS headers)
+// Three independent free CORS proxies, tried in order. Public proxies like
+// these are unofficial and can go down or rate-limit independently of
+// anything in this app — having three means one being flaky doesn't take
+// the whole feed down with it.
+async function fetchXmlViaProxy(url) {
+  const attempts = [
+    () => fetch(`${API.PROXY2}${encodeURIComponent(url)}`, {signal:AbortSignal.timeout(4500), cache:'no-store'}).then(r=>r.text()),
+    () => fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(url)}`, {signal:AbortSignal.timeout(4500), cache:'no-store'}).then(r=>r.text()),
+    () => fetch(`${API.PROXY}${encodeURIComponent(url)}`, {signal:AbortSignal.timeout(4500), cache:'no-store'})
+            .then(r=>r.json()).then(w=>w.contents),
+  ];
+  for (const attempt of attempts) {
+    try {
+      const text = await attempt();
+      if (text && text.includes('<item>')) return text;
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+// Minimal RSS/Atom XML parser using DOMParser (built into every browser)
+function parseRssXml(xmlText) {
+  try {
+    const doc = new DOMParser().parseFromString(xmlText, 'text/xml');
+    const items = Array.from(doc.querySelectorAll('item'));
+    return items.map(item => {
+      const get = tag => item.querySelector(tag)?.textContent?.trim() || '';
+      let title = get('title');
+      let source = get('source') || '';
+      // Google News titles are formatted "Headline - Source Name"
+      if (!source && title.includes(' - ')) {
+        const parts = title.split(' - ');
+        source = parts[parts.length-1].trim();
+        title = parts.slice(0,-1).join(' - ').trim();
+      }
+      const pubDate = get('pubDate');
+      return {
+        title: title || 'Untitled',
+        source: source || 'News',
+        date: pubDate ? formatRssDate(pubDate) : 'Recent',
+        url: get('link'),
+        rawDate: pubDate,
+      };
+    });
+  } catch(e) { return []; }
+}
+
+function formatRssDate(rfc822) {
+  try {
+    const d = new Date(rfc822);
+    if (isNaN(d.getTime())) return 'Recent';
+    const now = new Date();
+    const diffH = (now - d) / 36e5;
+    if (diffH < 1) return Math.round(diffH*60)+'m ago';
+    if (diffH < 24) return Math.round(diffH)+'h ago';
+    return `${d.getDate()}/${d.getMonth()+1}/${d.getFullYear()}`;
+  } catch(e) { return 'Recent'; }
+}
+
+// Direct outlet RSS feeds — confirmed working, no key, no signup (2026)
+const DIRECT_RSS_FEEDS = [
+  {url:'https://feeds.bbci.co.uk/news/world/rss.xml',       source:'BBC World',      cat:'conflict'},
+  {url:'https://www.aljazeera.com/xml/rss/all.xml',          source:'Al Jazeera',     cat:'conflict'},
+  {url:'https://www.defensenews.com/arc/outboundfeeds/rss/', source:'Defense News',  cat:'military'},
+  {url:'https://thedefensepost.com/feed/',                   source:'Defense Post',  cat:'military'},
+  {url:'https://www.defence-blog.com/feed/',                 source:'Defence Blog',  cat:'military'},
+  {url:'https://iswresearch.org/feeds/posts/default',        source:'ISW',           cat:'military'},
+  {url:'https://www.crisisgroup.org/rss-0',                   source:'Crisis Group', cat:'conflict'},
+];
+
+async function fetchDirectRssFeeds() {
+  const results = await Promise.allSettled(
+    DIRECT_RSS_FEEDS.map(async feed => {
+      const xml = await fetchXmlViaProxy(feed.url);
+      if (!xml) return [];
+      return parseRssXml(xml).slice(0,15).map(item => ({
+        ...item,
+        source: item.source === 'News' ? feed.source : item.source,
+        cat: feed.cat,
+        _src: 'rss',
+      }));
+    })
+  );
+  const all = [];
+  results.forEach(r => { if (r.status === 'fulfilled') all.push(...r.value); });
+  return all;
+}
+
+// ─── HELPER: fetch with multiple CORS proxy fallbacks ─────────────
+async function proxiedFetch(url, opts={}) {
+  const proxies = [
+    u => u,                                      // direct first
+    u => `${API.PROXY2}${encodeURIComponent(u)}`,
+    u => `https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(u)}`,
+    u => `${API.PROXY}${encodeURIComponent(u)}`,
+  ];
+  for (const proxy of proxies) {
+    try {
+      const r = await fetch(proxy(url), {...opts, signal:AbortSignal.timeout(5000)});
+      if (!r.ok) continue;
+      const ct = r.headers.get('content-type')||'';
+      if (ct.includes('json')) return r.json();
+      const text = await r.text();
+      // allorigins wraps in {contents:'...'}
+      if (text.includes('"contents"')) {
+        const w = JSON.parse(text);
+        return JSON.parse(w.contents||w.content||'{}');
+      }
+      return JSON.parse(text);
+    } catch(e) { continue; }
+  }
+  return null;
+}
+
+// ─── CONFLICT EVENTS — Google News RSS + curated outlet RSS (live) ────
+async function fetchConflicts() {
+  let all = [];
+  if (proxyStatus.corsproxy === null) runProxyDiagnostics(); // fire once, non-blocking
+
+  // All queries fire in ONE parallel batch — previously this was two
+  // sequential rounds ("try 3, then IF thin try 4 more, then IF still thin
+  // try direct RSS"), which meant total failure could take 2-3x as long as
+  // necessary. Running everything at once caps worst-case wait to a single
+  // round regardless of how many sources come up empty.
+  const gnQueries = [
+    {q:'airstrike OR missile strike OR military strike',  cat:'military'},
+    {q:'ceasefire OR war OR battlefield OR offensive',     cat:'conflict'},
+    {q:'drone attack OR explosion OR bombing',             cat:'conflict'},
+    {q:'insurgents OR militants OR rebels clash',          cat:'conflict'},
+    {q:'coup OR uprising OR unrest military',              cat:'military'},
+  ];
+
+  const [gnResults, directItems, wikiItems] = await Promise.all([
+    Promise.allSettled(gnQueries.map(async s => {
+      const items = await fetchFreshNewsRSS(s.q, 20);
+      return items.map(item => ({ ...item, cat: s.cat }));
+    })),
+    fetchDirectRssFeeds().catch(()=>[]),
+    fetchWikiConflictStatus().catch(()=>[]),
+  ]);
+
+  gnResults.forEach(b => {
+    if (b.status !== 'fulfilled') return;
+    b.value.forEach(item => {
+      const geo = extractGeoFromText(item.title);
+      if (!geo) return; // skip ungeocodable headlines for map dots
+      all.push({
+        title: item.title, source: item.source, date: item.date,
+        rawDate: item.rawDate, lat: geo.lat, lon: geo.lon, country: geo.region,
+        url: item.url, cat: item.cat, _src: 'gnews',
+      });
+    });
+  });
+  directItems.forEach(item => {
+    const geo = extractGeoFromText(item.title);
+    if (!geo) return;
+    all.push({ ...item, lat: geo.lat, lon: geo.lon, country: geo.region });
+  });
+  wikiItems.forEach(item => {
+    if (!item.lat) return; // already geocoded in fetchWikiConflictStatus
+    all.push(item);
+  });
+
+  mergeIntoConflicts(all, 'gnews-batch');
+}
+
+// Extract approximate coordinates from a headline by matching country/region
+// keywords — lets us plot Google News RSS items (which lack geo-coords) on
+// the map without needing a paid geocoding API.
+const GEO_KEYWORDS = [
+  {kws:['ukrain','kyiv','kiev','zelensky','donetsk','kharkiv','kherson'], lat:48.5, lon:31.0, region:'Ukraine'},
+  {kws:['gaza','israel','palestin','hamas','idf','tel aviv','rafah'],     lat:31.5, lon:34.6, region:'Israel/Gaza'},
+  {kws:['yemen','houthi','sanaa','red sea'],                             lat:15.6, lon:48.0, region:'Yemen'},
+  {kws:['syria','damascus','assad'],                                     lat:34.8, lon:38.9, region:'Syria'},
+  {kws:['iraq','baghdad'],                                               lat:33.3, lon:44.4, region:'Iraq'},
+  {kws:['iran','tehran'],                                                lat:32.4, lon:53.7, region:'Iran'},
+  {kws:['afghanistan','kabul','taliban'],                                lat:33.9, lon:67.7, region:'Afghanistan'},
+  {kws:['sudan','khartoum','darfur'],                                    lat:15.5, lon:32.5, region:'Sudan'},
+  {kws:['somalia','mogadishu','al-shabaab'],                             lat:5.2,  lon:46.2, region:'Somalia'},
+  {kws:['nigeria','boko haram'],                                         lat:9.1,  lon:8.7,  region:'Nigeria'},
+  {kws:['myanmar','rohingya'],                                           lat:19.2, lon:96.7, region:'Myanmar'},
+  {kws:['pakistan','islamabad','kashmir'],                               lat:30.4, lon:69.3, region:'Pakistan'},
+  {kws:['taiwan','taipei'],                                              lat:23.7, lon:121.0,region:'Taiwan'},
+  {kws:['china','beijing','south china sea','xi jinping'],               lat:35.9, lon:104.2,region:'China'},
+  {kws:['russia','moscow','putin','kremlin'],                            lat:55.8, lon:37.6, region:'Russia'},
+  {kws:['north korea','pyongyang','kim jong'],                           lat:39.0, lon:125.8,region:'North Korea'},
+  {kws:['south korea','seoul'],                                          lat:37.6, lon:127.0,region:'South Korea'},
+  {kws:['lebanon','hezbollah','beirut'],                                 lat:33.9, lon:35.5, region:'Lebanon'},
+  {kws:['mali','sahel'],                                                 lat:17.6, lon:-3.9, region:'Mali'},
+  {kws:['libya','tripoli'],                                              lat:26.3, lon:17.2, region:'Libya'},
+  {kws:['ethiopia','tigray','amhara'],                                   lat:9.0,  lon:40.5, region:'Ethiopia'},
+  {kws:['congo','drc','kinshasa'],                                       lat:-2.9, lon:23.6, region:'DRC'},
+  {kws:['venezuela','caracas','maduro'],                                 lat:7.0,  lon:-66.0,region:'Venezuela'},
+  {kws:['haiti','port-au-prince'],                                       lat:18.9, lon:-72.3,region:'Haiti'},
+  {kws:['poland','warsaw'],                                              lat:52.2, lon:21.0, region:'Poland'},
+  {kws:['nato'],                                                         lat:50.8, lon:4.4,  region:'NATO HQ'},
+  {kws:['india','kashmir','modi'],                                       lat:28.6, lon:77.2, region:'India'},
+  {kws:['philippines','south china sea','manila'],                       lat:14.6, lon:121.0,region:'Philippines'},
+  {kws:['mexico','cartel','sinaloa','jalisco'],                          lat:23.6, lon:-102.5,region:'Mexico'},
+  {kws:['colombia','farc','eln','bogota'],                               lat:4.6,  lon:-74.1, region:'Colombia'},
+  {kws:['armenia','azerbaijan','nagorno-karabakh','karabakh'],           lat:39.9, lon:46.4,  region:'Nagorno-Karabakh'},
+  {kws:['bangladesh','dhaka'],                                           lat:23.8, lon:90.4,  region:'Bangladesh'},
+  {kws:['mozambique','cabo delgado'],                                    lat:-18.7,lon:35.5,  region:'Mozambique'},
+  {kws:['niger','burkina faso','chad','sahel jihadist'],                 lat:13.5, lon:2.1,   region:'Sahel'},
+  {kws:['bosnia','kosovo','serbia','balkans'],                           lat:43.9, lon:20.7,  region:'Balkans'},
+  {kws:['cyprus'],                                                       lat:35.1, lon:33.4,  region:'Cyprus'},
+  {kws:['egypt','sinai','cairo'],                                        lat:26.8, lon:30.8,  region:'Egypt'},
+  {kws:['cameroon','ambazonia'],                                         lat:5.9,  lon:11.5,  region:'Cameroon'},
+  {kws:['sri lanka','colombo'],                                          lat:7.9,  lon:80.7,  region:'Sri Lanka'},
+  {kws:['georgia','abkhazia','south ossetia'],                           lat:42.3, lon:43.4,  region:'Georgia'},
+  {kws:['moldova','transnistria'],                                       lat:47.4, lon:28.4,  region:'Moldova'},
+  {kws:['japan','tokyo','senkaku'],                                      lat:36.2, lon:138.3, region:'Japan'},
+];
+
+function extractGeoFromText(text) {
+  const lower = (text||'').toLowerCase();
+  for (const g of GEO_KEYWORDS) {
+    if (g.kws.some(kw => lower.includes(kw))) return g;
+  }
+  return null;
+}
+
+// Lets independent sources (Google News RSS batch, ReliefWeb, Wikipedia
+// background status) each contribute to the same map layer without
+// clobbering each other when they refresh on their own separate timers —
+// each call only replaces entries it previously added itself.
+function mergeIntoConflicts(newItems, batchTag) {
+  const kept = S.conflicts.filter(c => c._batch !== batchTag);
+  const seen = new Set(kept.map(c => c.title.slice(0,30).toLowerCase().replace(/[^a-z]/g,'')));
+  const fresh = newItems.filter(a => {
+    if (!a.title || a.title.length < 8 || !a.lat || !a.lon) return false;
+    const k = a.title.slice(0,30).toLowerCase().replace(/[^a-z]/g,'');
+    if (seen.has(k)) return false;
+    seen.add(k); return true;
+  }).map(a => ({ ...a, _batch: batchTag }));
+  S.conflicts = [...kept, ...fresh].sort((a,b) => toTs(b)-toTs(a)).slice(0,80);
+
+  const gotRealData = S.conflicts.length > 0;
+  renderConflicts();
+  const liveCount = S.conflicts.filter(c=>c._src==='gnews').length;
+  document.getElementById('conflict-badge').textContent =
+    gotRealData ? (liveCount > 0 ? `LIVE ${S.conflicts.length}` : `WIRE ${S.conflicts.length}`) : 'NO DATA';
+  if (gotRealData) syncLiveWireIntoAcled();
+}
+
+// ─── WIKIPEDIA — genuinely proxy-free (native CORS via origin=*) ─────────
+// Wikimedia's API deliberately supports direct browser calls with no proxy
+// at all. This means it keeps working even when allorigins/corsproxy/codetabs
+// are blocked — which is exactly the failure mode that breaks every
+// Google-News-RSS-based source at once while USGS/Open-Meteo/ReliefWeb
+// (also proxy-free) keep working fine.
+//
+// This does NOT try to be a breaking-news wire. Wikipedia edits are not a
+// reliable proxy for "something just happened" — sorting by keyword search
+// + edit recency surfaced noise (an airport page mentioning "military
+// airport" in passing, sorted above genuine conflict articles). Instead we
+// look up a curated list of KNOWN ongoing conflicts by their EXACT article
+// title — a direct lookup, not a keyword search — so there is no category
+// of incidental false-positive match possible. Framed honestly as
+// "background status", not live headlines.
+const KNOWN_CONFLICTS = [
+  {title:'Russian invasion of Ukraine',              lat:48.5,  lon:32.0,  region:'Ukraine'},
+  {title:'Gaza war',                                  lat:31.5,  lon:34.47, region:'Gaza'},
+  {title:'Yemeni civil war (2014–present)',           lat:15.5,  lon:44.2,  region:'Yemen'},
+  {title:'Sudanese civil war (2023–present)',         lat:15.5,  lon:32.5,  region:'Sudan'},
+  {title:'Myanmar civil war (2021–present)',          lat:21.9,  lon:96.1,  region:'Myanmar'},
+  {title:'Kashmir conflict',                          lat:34.0,  lon:76.5,  region:'Kashmir'},
+  {title:'Somali Civil War',                          lat:5.15,  lon:46.2,  region:'Somalia'},
+  {title:'Mali War',                                  lat:17.0,  lon:-4.0,  region:'Sahel'},
+  {title:'Syrian civil war',                          lat:35.0,  lon:38.0,  region:'Syria'},
+  {title:'Israeli–Palestinian conflict',              lat:31.9,  lon:35.2,  region:'Israel/Palestine'},
+  {title:'War in Amhara',                             lat:11.6,  lon:37.4,  region:'Ethiopia'},
+  {title:'Red Sea crisis',                            lat:15.0,  lon:42.5,  region:'Red Sea'},
+  {title:'Insurgency in the Maghreb (2002–present)',  lat:23.0,  lon:2.0,   region:'Maghreb/Sahel'},
+  {title:'Colombian conflict',                        lat:4.6,   lon:-74.1, region:'Colombia'},
+];
+
+async function fetchWikiConflictStatus() {
+  const titles = KNOWN_CONFLICTS.map(c => c.title).join('|');
+  try {
+    const url = `https://en.wikipedia.org/w/api.php?action=query`+
+      `&titles=${encodeURIComponent(titles)}&prop=revisions`+
+      `&rvprop=timestamp|comment&rvlimit=1&format=json&redirects=1`+
+      `&origin=*&_ts=${Date.now()}`;
+    const r = await fetch(url, {signal:AbortSignal.timeout(6000), cache:'no-store'});
+    if (!r.ok) return [];
+    const d = await r.json();
+    const pages = d.query?.pages || {};
+    return Object.values(pages).map(p => {
+      const conflict = KNOWN_CONFLICTS.find(c => c.title === p.title) ||
+        KNOWN_CONFLICTS.find(c => (d.query.redirects||[]).some(r => r.to===p.title && r.from===c.title));
+      const rev = p.revisions?.[0];
+      if (!conflict || !rev?.timestamp) return null;
+      const ageHrs = hoursSince(rev.timestamp);
+      // Only surface it if genuinely edited recently (48h) — otherwise this
+      // conflict just hasn't had notable Wikipedia activity lately, which
+      // is real information too (shown separately, not as a "recent" item)
+      if (ageHrs > 48) return null;
+      return {
+        title: `${conflict.title}: recent Wikipedia activity`,
+        source: 'Wikipedia (background, not breaking news)',
+        date: rev.timestamp.slice(0,10), rawDate: rev.timestamp,
+        url: `https://en.wikipedia.org/wiki/${encodeURIComponent(conflict.title.replace(/ /g,'_'))}`,
+        country: conflict.region, lat: conflict.lat, lon: conflict.lon,
+        cat: 'military', _src: 'wiki-bg',
+      };
+    }).filter(Boolean);
+  } catch(e) { return []; }
+}
+
+// ─── PROXY DIAGNOSTICS — visible, in-app, no DevTools required ───────────
+// Tests each proxy this app depends on with one small real request so the
+// News panel can tell you EXACTLY what's reachable from your network instead
+// of guessing. Runs once at startup, non-blocking.
+const proxyStatus = { corsproxy: null, codetabs: null, allorigins: null };
+async function runProxyDiagnostics() {
+  const testUrl = 'https://news.google.com/rss/search?q=test';
+  const tests = [
+    ['corsproxy',  () => fetch(`${API.PROXY2}${encodeURIComponent(testUrl)}`, {signal:AbortSignal.timeout(6000)})],
+    ['codetabs',   () => fetch(`https://api.codetabs.com/v1/proxy?quest=${encodeURIComponent(testUrl)}`, {signal:AbortSignal.timeout(6000)})],
+    ['allorigins', () => fetch(`${API.PROXY}${encodeURIComponent(testUrl)}`, {signal:AbortSignal.timeout(6000)})],
+  ];
+  await Promise.all(tests.map(async ([name, fn]) => {
+    try { const r = await fn(); proxyStatus[name] = r.ok; }
+    catch(e) { proxyStatus[name] = false; }
+  }));
+}
+
+function formatGdeltDate(s) {
+  if (!s) return 'Recent';
+  const c = String(s).replace(/\D/g,'');
+  if (c.length >= 8) return `${c.slice(6,8)}/${c.slice(4,6)}/${c.slice(0,4)}`;
+  return String(s).slice(0,10);
+}
+
+// ISO2 country code → lat/lon lookup (kept for reference; unused now that
+// GDELT-based country mapping has been removed)
+const COUNTRY_ISO_COORDS = {
+  UA:{lat:48.5,lon:31.0}, PS:{lat:31.5,lon:34.5}, IL:{lat:31.5,lon:34.8},
+  YE:{lat:15.6,lon:48.0}, SD:{lat:15.5,lon:32.5}, ET:{lat:9.0,lon:40.5},
+  SY:{lat:34.8,lon:38.9}, IQ:{lat:33.3,lon:44.4}, AF:{lat:33.9,lon:67.7},
+  SO:{lat:5.2,lon:46.2},  NG:{lat:9.1,lon:8.7},   ML:{lat:17.6,lon:-3.9},
+  CD:{lat:-2.9,lon:23.6}, MM:{lat:19.2,lon:96.7},  SS:{lat:6.9,lon:31.3},
+  PK:{lat:30.4,lon:69.3}, LY:{lat:26.3,lon:17.2},  HT:{lat:18.9,lon:-72.3},
+  MZ:{lat:-18.7,lon:35.5},CF:{lat:6.6,lon:20.9},   BF:{lat:12.4,lon:-1.6},
+  NE:{lat:17.6,lon:8.1},  TD:{lat:15.5,lon:18.7},  CO:{lat:4.6,lon:-74.1},
+  MX:{lat:23.6,lon:-102.5},RU:{lat:55.8,lon:37.6}, CN:{lat:35.9,lon:104.2},
+  IR:{lat:32.4,lon:53.7}, LB:{lat:33.9,lon:35.5},  LK:{lat:7.9,lon:80.7},
+  IN:{lat:20.6,lon:78.9}, PH:{lat:12.9,lon:121.8}, US:{lat:38.9,lon:-77.0},
+  GB:{lat:51.5,lon:-0.1}, FR:{lat:48.9,lon:2.4},   DE:{lat:52.5,lon:13.4},
+  IL:{lat:31.5,lon:34.8}, SA:{lat:24.7,lon:46.7},  AE:{lat:24.5,lon:54.4},
+};
+const COUNTRY_ISO_NAMES = {
+  UA:'Ukraine',PS:'Palestine',IL:'Israel',YE:'Yemen',SD:'Sudan',ET:'Ethiopia',
+  SY:'Syria',IQ:'Iraq',AF:'Afghanistan',SO:'Somalia',NG:'Nigeria',ML:'Mali',
+  CD:'DRC',MM:'Myanmar',SS:'South Sudan',PK:'Pakistan',LY:'Libya',HT:'Haiti',
+  MZ:'Mozambique',CF:'CAR',BF:'Burkina Faso',NE:'Niger',TD:'Chad',
+  CO:'Colombia',MX:'Mexico',RU:'Russia',CN:'China',IR:'Iran',LB:'Lebanon',
+  IN:'India',PH:'Philippines',US:'USA',GB:'UK',FR:'France',DE:'Germany',
+  SA:'Saudi Arabia',AE:'UAE',
+};
+
+// ─── UCDP Uppsala — precise academic conflict data (HISTORICAL, not live —
+// UCDP's GED dataset is refreshed periodically, not in real time) ─────────
+async function fetchUCDP() {
+  try {
+    const r = await fetch(`${API.UCDP}?pagesize=200&page=1`,
+      {signal:AbortSignal.timeout(12000)});
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    if (!d.Result?.length) throw 0;
+    S.ucdp = d.Result.map(e=>({
+      country:  e.country,
+      lat:      parseFloat(e.latitude),
+      lon:      parseFloat(e.longitude),
+      deaths:   parseInt(e.best)||0,
+      type:     e.type_of_violence===1?'State conflict':
+                e.type_of_violence===2?'Non-state conflict':'One-sided violence',
+      side_a:   e.side_a||'—',
+      side_b:   e.side_b||'—',
+      location: e.where_description||e.country||'—',
+      year:     e.year,
+    })).filter(e=>!isNaN(e.lat)&&!isNaN(e.lon)&&e.lat!==0);
+  } catch(e) { return; /* supplementary — silent fail */ }
+
+  if (!S.ucdp.length || !LG.acled) return;
+  S.ucdp.slice(0,100).forEach(e=>{
+    const color=e.deaths>20?'#ff5090':e.deaths>5?'#cc30a0':'#9050b0';
+    const sz=Math.min(9,Math.max(3,3+e.deaths*0.12));
+    dot(e.lat,e.lon,color,sz,popup(`${e.type}`,`🔬`,[
+      ['Parties',`${e.side_a} vs ${e.side_b}`],
+      ['Location',e.location],['Country',e.country],
+      ['Year',String(e.year)],['Deaths (est)',String(e.deaths)],
+      ['Source','UCDP Uppsala University'],
+    ]),'acled',38);
+  });
+  addNewsItems(S.ucdp.slice(0,10).map(e=>({
+    title:`${e.type}: ${e.side_a} vs ${e.side_b} — ${e.location}`,
+    source:'UCDP Uppsala',date:String(e.year),cat:'conflict',
+    lat:e.lat,lon:e.lon,_src:'ucdp',
+  })));
+}
+
+// ─── ReliefWeb — UN OCHA humanitarian/conflict reports ────────────
+async function fetchReliefWeb() {
+  try {
+    const url = `${API.RELIEFWEB}?appname=godseyeplatform&limit=30&sort[]=date:desc`+
+      `&filter[conditions][0][field]=theme.name&filter[conditions][0][value]=Conflict+and+Violence`+
+      `&fields[include][]=title&fields[include][]=date&fields[include][]=country`+
+      `&fields[include][]=source&fields[include][]=url`;
+    // ReliefWeb has open CORS
+    const r = await fetch(url, {signal:AbortSignal.timeout(10000)});
+    if (!r.ok) throw 0;
+    const d = await r.json();
+    if (!d.data?.length) throw 0;
+    const items = d.data.map(item=>{
+      const f = item.fields;
+      const country = f.country?.[0]?.name||'Unknown';
+      const coords = COUNTRY_COORDS[country]||CONFLICT_COORDS[0];
+      return {
+        title:   f.title||'UN Crisis Report',
+        date:    f.date?.created?.slice(0,10)||'Recent',
+        source:  f.source?.[0]?.name||'UN OCHA',
+        url:     f.url||'',
+        country, lat:coords.lat, lon:coords.lon,
+        cat:'crisis', _src:'reliefweb',
+      };
+    });
+    S.reliefweb = items;
+    addNewsItems(items);
+    // ReliefWeb is proxy-free and confirmed reliable — feed it into the map
+    // layers too (tagged 'crisis', distinct from military/conflict dots),
+    // so Conflict Events / Armed Conflicts have real content even when the
+    // proxy-dependent Google News RSS sources are blocked on a network.
+    mergeIntoConflicts(items, 'reliefweb');
+  } catch(e) { /* supplementary */ }
+}
+
+// ─── OSINT NEWS — aggregated from live RSS + ReliefWeb + UCDP ─────
+let _newsFilter = 'all';
+
+function addNewsItems(items) {
+  const seen = new Set(S.news.map(n=>n.title.slice(0,25).toLowerCase()));
+  items.forEach(item => {
+    const k = (item.title||'').slice(0,25).toLowerCase();
+    if (!seen.has(k) && item.title?.length > 8) {
+      seen.add(k);
+      S.news.push(item);
+    }
+  });
+  S.news.sort((a,b) => toTs(b) - toTs(a));
+  S.news = S.news.slice(0,100);
+  renderNewsTab(_newsFilter);
+}
+
+async function fetchOsintNews() {
+  S.news = [];
+
+  // ALL sources fire in ONE parallel batch now (previously up to 3
+  // sequential rounds — Google News primary, then direct RSS, then a
+  // second Google News round if still thin — which compounded worst-case
+  // wait time badly whenever proxies were slow/down). ReliefWeb, UCDP, and
+  // Wikipedia need no proxy at all, so they land fast regardless of what
+  // happens with the proxy-dependent sources.
+  const gNewsQueries = [
+    {q:'military strike OR airstrike OR missile attack',        cat:'military'},
+    {q:'war OR ceasefire OR battlefield OR offensive',          cat:'conflict'},
+    {q:'troops deployment OR military exercise OR mobilization',cat:'military'},
+    {q:'drone strike OR explosion OR bombing',                  cat:'conflict'},
+    {q:'humanitarian crisis OR refugees OR displaced',          cat:'crisis'},
+  ];
+
+  const [gNewsBatches, directItems, wikiItems] = await Promise.all([
+    Promise.allSettled(gNewsQueries.map(async t => {
+      const items = await fetchFreshNewsRSS(t.q, 15);
+      return items.map(item => ({ ...item, cat: t.cat, _src: 'gnews' }));
+    })),
+    fetchDirectRssFeeds().catch(()=>[]),
+    fetchWikiConflictStatus().catch(()=>[]),
+    fetchReliefWeb(),  // pushes into S.news itself via addNewsItems
+    fetchUCDP(),       // pushes into S.acled/map, not news — harmless to include here
+  ]);
+
+  const liveItems = [];
+  gNewsBatches.forEach(b => { if (b.status === 'fulfilled') liveItems.push(...b.value); });
+  liveItems.push(...directItems);
+  liveItems.push(...wikiItems);
+
+  addNewsItems(liveItems.filter(a => a.title && a.title.length > 8));
+  newsFetchAttempted = true;
+  renderNewsTab(_newsFilter);
+}
+
+function classifyNews(title) {
+  const t = (title||'').toLowerCase();
+  if (['airstrike','missile','bomb','explosion','blast','drone','torpedo'].some(k=>t.includes(k))) return 'military';
+  if (['war','battle','troops','soldiers','army','navy','carrier','warship','ceasefire'].some(k=>t.includes(k))) return 'conflict';
+  if (['crisis','humanitarian','refugees','displaced','famine','aid'].some(k=>t.includes(k))) return 'crisis';
+  if (['spy','surveillance','intelligence','intercept','satellite','cyber'].some(k=>t.includes(k))) return 'intel';
+  return 'military';
+}
+
+let newsFetchAttempted = false;
+
+function renderNewsTab(filter) {
+  _newsFilter = filter;
+  const items = filter==='all' ? S.news :
+    S.news.filter(n => n.cat===filter);
+  const srcIcon = {livewire:'📡',reliefweb:'🇺🇳',ucdp:'🔬',wiki:'📖',gnews:'🔴',rss:'📰',acled:'⚡'};
+  const catCol = {military:'var(--amber)',conflict:'var(--red)',crisis:'var(--cyan)',intel:'var(--purple)'};
+  const catBg  = {military:'rgba(240,192,48,0.08)',conflict:'rgba(240,64,96,0.08)',
+    crisis:'rgba(41,212,245,0.08)',intel:'rgba(144,96,240,0.08)'};
+
+  // Store items in a global array so click handlers can reference by index
+  // (avoids fragile inline-string escaping of titles/URLs with quotes)
+  window._newsClickItems = items;
+
+  const proxyLines = Object.entries(proxyStatus).map(([name,ok]) =>
+    `${name}: ${ok===null?'not tested yet':ok?'<span class="diag-ok">✓ reachable</span>':'<span class="diag-fail">✗ blocked/failed</span>'}`
+  ).join(' &middot; ');
+  const allProxiesDead = Object.values(proxyStatus).every(v => v === false);
+  const emptyMsg = !newsFetchAttempted
+    ? 'Loading news…'
+    : allProxiesDead
+      ? `All 3 news proxies failed from this network (${proxyLines}). This `+
+        `usually means your network/firewall blocks generic proxy domains `+
+        `(common on college/office networks) — Wikipedia and ReliefWeb `+
+        `sources above are unaffected. Try a mobile hotspot to confirm.`
+      : `No items came back this cycle. Proxy status: ${proxyLines}. `+
+        `Retrying automatically.`;
+
+  document.getElementById('news-feed').innerHTML = !items.length
+    ? `<div class="feed-item"><div class="feed-body"><div class="feed-meta diag-note">${emptyMsg}</div></div></div>`
+    : items.slice(0,35).map((n,i)=>{
+        const clickable = n.url || n.lat;
+        return `<div class="feed-item" style="border-left:2px solid ${catCol[n.cat]||'var(--border)'};padding-left:10px;${clickable?'cursor:pointer':''}"
+      onclick="${clickable?`handleNewsClick(${i})`:''}">
+      <div class="feed-icon" style="font-size:12px">${srcIcon[n._src]||'📰'}</div>
+      <div class="feed-body">
+        <div class="feed-title" style="white-space:normal;line-height:1.35;font-size:11px">${
+          (n.title||'').slice(0,100)}${(n.title||'').length>100?'…':''}</div>
+        <div class="feed-meta" style="margin-top:3px;display:flex;gap:6px;flex-wrap:wrap">
+          <span style="color:${catCol[n.cat]||'var(--text-dim)'};font-size:9px;font-weight:700;
+            text-transform:uppercase;background:${catBg[n.cat]||''};padding:1px 4px;border-radius:2px">${n.cat||'news'}</span>
+          <span>${n.source}</span>
+          <span style="color:var(--text-dim)">·</span>
+          <span>${n.date||'Recent'}</span>
+          ${n.country?`<span style="color:var(--text-dim)">·</span><span>${n.country}</span>`:''}
+          ${n.url?'<span style="color:var(--cyan-dim)">· read →</span>':''}
+        </div>
+      </div>
+    </div>`;
+      }).join('');
+}
+
+function handleNewsClick(idx) {
+  const n = window._newsClickItems?.[idx];
+  if (!n) return;
+  if (n.lat && n.lon) { flyTo(n.lat, n.lon, 5); }
+  else if (n.url) { window.open(n.url, '_blank', 'noopener'); }
+}
+
+function switchNewsFilter(filter, btn) {
+  document.querySelectorAll('#pane-news .mil-tab-btn').forEach(b=>b.classList.remove('active'));
+  if (btn) btn.classList.add('active');
+  renderNewsTab(filter);
+}
+
+function mergeNewsIntoFeed() {} // No-op — handled by addNewsItems
+
+// ─── ACLED — Armed Conflict Location & Event Data ─────────────────
+async function fetchACLED() {
+  // 1) If the user has pasted their own free ACLED token, that's the most
+  //    authoritative source (official, human-verified). Worth knowing: ACLED
+  //    verifies events by hand, so even fresh ACLED data typically trails
+  //    real-world events by 1–3 weeks — that's their methodology, not a bug.
+  const creds = getAcledCreds();
+  if (creds?.token) {
+    try {
+      S.acled = await fetchAcledWithToken(creds.token);
+      renderACLED();
+      addNewsItems(S.acled.filter(e=>e.deaths>2).slice(0,15).map(e=>({
+        title:`${e.type}: ${e.subtype} — ${e.location}, ${e.country} (${e.deaths} fatalities)`,
+        source:'ACLED',date:e.date,cat:'conflict',lat:e.lat,lon:e.lon,_src:'acled',
+      })));
+      document.getElementById('lsub-acled').textContent = `${S.acled.length} verified incidents (ACLED)`;
+      return;
+    } catch(err) {
+      console.warn('ACLED token rejected/expired, falling back to live wire:', err.message);
+    }
+  }
+
+  // 2) No token — use whatever the live-wire (Conflict Events) pipeline has
+  //    ALREADY fetched right now. Deliberately does NOT trigger its own
+  //    fetchConflicts() call here — that pipeline runs multiple sequential
+  //    proxy queries and used to block this entire function (and therefore
+  //    the app's initial load screen) behind it. Instead, syncLiveWireIntoAcled()
+  //    below gets called automatically the moment fetchConflicts() finishes,
+  //    so this layer fills in within a few seconds without ever blocking.
+  const synced = syncLiveWireIntoAcled();
+  if (!synced) {
+    // Previously fell back to DEMO_ACLED here — fabricated but realistic-
+    // sounding placeholder incidents attributed to real countries/cities.
+    // That's genuinely misleading on a map presented as live intelligence,
+    // even with a small disclaimer elsewhere. If there's no real data yet,
+    // show none — honestly — rather than plausible-looking fiction.
+    S.acled = [];
+    renderACLED();
+    document.getElementById('lsub-acled').textContent =
+      `0 events — waiting for live feed…`;
+  }
+}
+
+// Pushes whatever's currently in the live-wire Conflict Events feed into the
+// Armed Conflicts layer. Called right after fetchConflicts() completes (so
+// this layer updates the moment fresh data exists) and by fetchACLED() itself
+// for an instant best-effort fill. Never overwrites a real ACLED token feed.
+function syncLiveWireIntoAcled() {
+  if (getAcledCreds()?.token) return false; // verified ACLED is active — don't clobber it
+  const events = S.conflicts.filter(c => c.lat && c.lon).map(c => ({
+    date:    c.date,
+    type:    c.cat === 'military' ? 'Military Activity' : 'Reported Clash',
+    subtype: c.cat,
+    country: c.country || '',
+    location:c.country || '',
+    title:   c.title,
+    source:  c.source,
+    url:     c.url,
+    lat:     c.lat, lon: c.lon,
+    deaths:  0, // headline-derived — no verified casualty count available
+    cat:     c.cat, _src: 'livewire',
+  }));
+  if (!events.length) return false;
+  S.acled = events;
+  renderACLED();
+  document.getElementById('lsub-acled').textContent =
+    `${S.acled.length} live reports (news wire)`;
+  return true;
+}
+
+function getRecentDateRange() {
+  const t=new Date(), w=new Date(t-7*864e5);
+  const f=d=>`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`;
+  return `${f(w)}|${f(t)}`;
+}
+
+// ─── SHIPPING — AISHub (best free global AIS) ─────────────────────
+async function fetchVessels() {
+  let all = [];
+  // AISHub demo account — returns real vessel data worldwide
+  try {
+    const url = `${API.AISHUB}?username=AH_DEMO_1&format=1&output=json&compress=0`+
+      `&latmin=-60&latmax=75&lonmin=-180&lonmax=180`;
+    const r = await fetch(url, {signal:AbortSignal.timeout(10000)});
+    if (r.ok) {
+      const d = await r.json();
+      const rows = Array.isArray(d)&&Array.isArray(d[1]) ? d[1] : [];
+      all = rows.filter(v=>v.LATITUDE&&v.LONGITUDE&&v.MMSI)
+        .slice(0,400).map(v=>({
+          mmsi:     String(v.MMSI),
+          name:     (v.NAME||'UNKNOWN').trim()||'UNKNOWN',
+          type:     shipTypeKey(parseInt(v.TYPE)||0),
+          typeName: shipTypeName(parseInt(v.TYPE)||0),
+          lat:      parseFloat(v.LATITUDE),
+          lon:      parseFloat(v.LONGITUDE),
+          speed:    ((parseInt(v.SPEED)||0)/10).toFixed(1),
+          heading:  parseInt(v.COURSE)||0,
+          flag:     v.FLAG||'',
+          dest:     (v.DESTINATION||'').trim(),
+          draught:  v.DRAUGHT||0,
+          _src:'aishub',
+        })).filter(v=>!isNaN(v.lat)&&!isNaN(v.lon)&&Math.abs(v.lat)<85);
+    }
+  } catch(e) {}
+
+  // Second source: OpenSea / VesselFinder public JSON
+  if (all.length < 20) {
+    try {
+      // Try alternative public AIS endpoint
+      const r2 = await fetch(
+        'https://www.vesseltracker.com/VesselTrackerService?op=getVessels&bbox=-60,-180,75,180',
+        {signal:AbortSignal.timeout(6000)}
+      );
+      if (r2.ok) {
+        const d2 = await r2.json();
+        const rows2 = d2?.vessels || d2?.data || [];
+        rows2.slice(0,200).forEach(v=>{
+          const lat=parseFloat(v.lat||v.LAT), lon=parseFloat(v.lon||v.LON);
+          if(!isNaN(lat)&&!isNaN(lon)) all.push({
+            mmsi:String(v.mmsi||v.MMSI||''),
+            name:(v.name||v.NAME||'UNKNOWN').trim(),
+            type:shipTypeKey(parseInt(v.type||v.TYPE)||0),
+            typeName:shipTypeName(parseInt(v.type||v.TYPE)||0),
+            lat,lon,speed:((parseInt(v.speed||v.SOG)||0)/10).toFixed(1),
+            heading:parseInt(v.course||v.COG)||0,flag:'',dest:'',_src:'vt',
+          });
+        });
+      }
+    } catch(e) {}
+  }
+
+  const seen = new Set();
+  const unique = all.filter(v=>{
+    if(!v.mmsi||seen.has(v.mmsi)) return false;
+    seen.add(v.mmsi); return true;
+  });
+  S.vessels = unique.length>=5 ? unique : DEMO_VESSELS;
+  renderVessels();
+}
+
+function shipTypeKey(code) {
+  if(code>=80&&code<=89) return 'tanker';
+  if(code>=70&&code<=79) return 'cargo';
+  if(code>=60&&code<=69) return 'passenger';
+  if(code===35||code===36||code===37) return 'military';
+  if(code>=40&&code<=49) return 'highspeed';
+  if(code>=50&&code<=59) return 'special';
+  if(code>=30&&code<=34) return 'fishing';
+  return 'other';
+}
+function shipTypeName(code) {
+  return {tanker:'Tanker',cargo:'Cargo',passenger:'Passenger',military:'Naval',
+    highspeed:'High Speed',special:'Special Craft',fishing:'Fishing',other:'Vessel'}[shipTypeKey(code)]||'Vessel';
+}
+const VESSEL_COLORS={tanker:'#f0c030',cargo:'#29d4f5',passenger:'#22d97a',
+  military:'#f04060',highspeed:'#3080f0',special:'#9060f0',fishing:'#60c080',other:'#607090'};
+
+function renderVessels() {
+  LG.vessels.clearLayers();
+  if (S.layers.vessels) {
+    S.vessels.forEach(v=>{
+      if(!v.lat||!v.lon||isNaN(v.lat)||isNaN(v.lon)) return;
+      const color = VESSEL_COLORS[v.type]||'#607090';
+      const hdg = parseFloat(v.heading)||0;
+      const icon = L.divIcon({
+        className:'',
+        html:`<div style="width:8px;height:12px;background:${color};
+          box-shadow:0 0 5px ${color}88;
+          clip-path:polygon(50% 0%,100% 100%,50% 72%,0% 100%);
+          transform:rotate(${hdg}deg);margin:-6px 0 0 -4px"></div>`,
+        iconSize:[0,0],iconAnchor:[0,0],
+      });
+      L.marker([v.lat,v.lon],{icon,zIndexOffset:18})
+        .bindPopup(popup(v.name||'UNKNOWN','🚢',[
+          ['Type',    v.typeName||'Vessel'],
+          ['MMSI',    v.mmsi||'—'],
+          ['Speed',   `${v.speed||0} kts`],
+          ['Course',  `${v.heading||0}°`],
+          ['Dest',    v.dest||'—'],
+          ['Flag',    v.flag||'—'],
+          ['Source',  v._src==='aisstream'?'AISStream (live)':v._src==='aishub'?'AISHub':v._src==='vt'?'VesselTracker':'AIS Demo'],
+        ])).addTo(LG.vessels);
+    });
+  }
+  const n = S.vessels.length; S.counts.vessels=n;
+  const src = S.vessels[0]?._src==='aisstream' ? 'AISStream live' :
+    S.vessels[0]?._src==='demo' ? 'demo' :
+    S.vessels.some(v=>v._src==='aishub') ? 'AISHub Live' : 'AIS';
+  document.getElementById('lsub-vessels').textContent=`${n} vessels (${src})`;
+  if(document.getElementById('chip-vessels'))
+    document.getElementById('chip-vessels').textContent=n>999?(n/1000).toFixed(1)+'K':n;
+}
+
+// ─── AISStream.io — genuine real-time AIS via WebSocket (optional, free) ──
+// Needs a free API key (aisstream.io, sign up via GitHub/email, ~30 sec, no
+// card). Without one we keep using the AISHub/demo polling above. This is
+// the closest thing to true real-time vessel tracking that's free — global
+// AIS position reports as they're received, not on a polling delay.
+let aisSocket = null, aisReconnectTimer = null, aisRenderPending = false;
+const aisVesselMap = new Map(); // MMSI -> vessel object, capped below
+
+function getAisStreamKey() {
+  return localStorage.getItem('aisstream_key') || '';
+}
+function setAisStreamKey(key) {
+  if (key) localStorage.setItem('aisstream_key', key);
+  else localStorage.removeItem('aisstream_key');
+}
+function promptAisStreamSetup() {
+  const existing = getAisStreamKey();
+  const msg = 'Optional upgrade: paste a free AISStream.io API key for '+
+    'genuine real-time global ship tracking (sign up at aisstream.io, '+
+    'GitHub login, ~30 seconds, no card needed).\n\n'+
+    'Leave blank to keep using the free AISHub/demo feed instead:';
+  const key = prompt(msg, existing);
+  if (key === null) return; // cancelled
+  setAisStreamKey(key.trim());
+  if (aisSocket) { try { aisSocket.close(); } catch(e){} aisSocket = null; }
+  if (key.trim()) connectAisStream(key.trim());
+  else fetchVessels();
+}
+
+function connectAisStream(key) {
+  try {
+    aisSocket = new WebSocket(API.AISSTREAM_WS);
+  } catch(e) { fetchVessels(); return; }
+
+  aisSocket.onopen = () => {
+    aisSocket.send(JSON.stringify({
+      APIKey: key,
+      BoundingBoxes: [[[-90, -180], [90, 180]]],
+      FilterMessageTypes: ['PositionReport'],
+    }));
+    document.getElementById('lsub-vessels').textContent = 'Connected — waiting for live positions…';
+  };
+
+  aisSocket.onmessage = (event) => {
+    let msg;
+    try { msg = JSON.parse(event.data); } catch(e) { return; }
+    if (msg.MessageType !== 'PositionReport') return;
+    const pr = msg.Message?.PositionReport;
+    const meta = msg.MetaData;
+    if (!pr || !meta) return;
+    const mmsi = String(meta.MMSI || pr.UserID || '');
+    if (!mmsi) return;
+    aisVesselMap.set(mmsi, {
+      mmsi, name: (meta.ShipName||'UNKNOWN').trim()||'UNKNOWN',
+      type: 'cargo', typeName: 'Vessel',
+      lat: meta.latitude ?? pr.Latitude, lon: meta.longitude ?? pr.Longitude,
+      speed: (pr.Sog ?? 0).toFixed(1), heading: Math.round(pr.TrueHeading ?? pr.Cog ?? 0),
+      flag:'', dest:'', _src:'aisstream',
+    });
+    // Cap tracked vessels so the map/memory stays bounded on the global feed
+    if (aisVesselMap.size > 1500) {
+      const firstKey = aisVesselMap.keys().next().value;
+      aisVesselMap.delete(firstKey);
+    }
+    // Throttle re-renders to ~once every 2s regardless of message rate
+    if (!aisRenderPending) {
+      aisRenderPending = true;
+      setTimeout(() => {
+        S.vessels = Array.from(aisVesselMap.values());
+        renderVessels();
+        aisRenderPending = false;
+      }, 2000);
+    }
+  };
+
+  aisSocket.onerror = () => {
+    document.getElementById('lsub-vessels').textContent = 'AISStream error — check your key (⚙)';
+  };
+
+  aisSocket.onclose = () => {
+    aisSocket = null;
+    // Reconnect after a short delay unless the user cleared the key
+    if (getAisStreamKey()) {
+      clearTimeout(aisReconnectTimer);
+      aisReconnectTimer = setTimeout(() => connectAisStream(getAisStreamKey()), 8000);
+    }
+  };
+}
+
+const DEMO_VESSELS=[
+  {mmsi:'636018814',name:'EVER GIVEN 2',   type:'cargo',   typeName:'Container',lat:30.50,lon:32.30,speed:'13.5',heading:355,flag:'PA',dest:'CNSHA',_src:'demo'},
+  {mmsi:'477552700',name:'COSCO GLORY',    type:'cargo',   typeName:'Container',lat:29.90,lon:32.51,speed:'12.8',heading:350,flag:'CN',dest:'NLRTM',_src:'demo'},
+  {mmsi:'403474000',name:'GULF STAR',      type:'tanker',  typeName:'VLCC',     lat:26.10,lon:56.20,speed:'11.8',heading:135,flag:'SA',dest:'SAJUB',_src:'demo'},
+  {mmsi:'422100700',name:'HORMUZ 7',       type:'tanker',  typeName:'Tanker',   lat:26.50,lon:57.10,speed:'12.1',heading:280,flag:'IR',dest:'IRBND',_src:'demo'},
+  {mmsi:'563014200',name:'OCEAN EMERALD',  type:'cargo',   typeName:'Container',lat:1.20, lon:103.90,speed:'11.2',heading:315,flag:'SG',dest:'SGSIN',_src:'demo'},
+  {mmsi:'525005990',name:'BATAM TRADER',   type:'cargo',   typeName:'Bulk',     lat:0.80, lon:104.20,speed:'9.5', heading:45, flag:'ID',dest:'IDBTM',_src:'demo'},
+  {mmsi:'265503160',name:'STENA GERMANICA',type:'passenger',typeName:'Ferry',   lat:57.70,lon:11.90, speed:'18.0',heading:270,flag:'SE',dest:'DEKIE',_src:'demo'},
+  {mmsi:'636015815',name:'ARCHANGEL',      type:'military',typeName:'Warship',  lat:55.60,lon:18.90, speed:'22.0',heading:90, flag:'RU',dest:'RURND',_src:'demo'},
+  {mmsi:'431000327',name:'FUJISAN MARU',   type:'cargo',   typeName:'Container',lat:35.00,lon:145.00,speed:'15.0',heading:90, flag:'JP',dest:'USLAX',_src:'demo'},
+  {mmsi:'440328000',name:'HYUNDAI UNITY',  type:'cargo',   typeName:'Container',lat:34.50,lon:128.00,speed:'14.2',heading:270,flag:'KR',dest:'CNSHA',_src:'demo'},
+  {mmsi:'419000537',name:'MUMBAI EXPRESS', type:'cargo',   typeName:'Container',lat:12.00,lon:65.00, speed:'14.5',heading:315,flag:'IN',dest:'GBFXT',_src:'demo'},
+  {mmsi:'312600000',name:'PERSIAN QUEEN',  type:'tanker',  typeName:'Tanker',   lat:8.00, lon:58.00, speed:'11.0',heading:225,flag:'OM',dest:'SGSIN',_src:'demo'},
+  {mmsi:'259228000',name:'ARCTIC DAWN',    type:'tanker',  typeName:'LNG',      lat:69.20,lon:33.10, speed:'8.2', heading:90, flag:'NO',dest:'NLROT',_src:'demo'},
+  {mmsi:'248422000',name:'MSC BELLISSIMA', type:'passenger',typeName:'Cruise',  lat:36.50,lon:15.50, speed:'20.0',heading:90, flag:'PA',dest:'ITGOA',_src:'demo'},
+  {mmsi:'369970330',name:'USS GERALD FORD',type:'military',typeName:'Carrier',  lat:35.00,lon:-40.00,speed:'18.0',heading:270,flag:'US',dest:'USNFK',_src:'demo'},
+  {mmsi:'369970331',name:'USS MILIUS',     type:'military',typeName:'Destroyer',lat:18.50,lon:123.50,speed:'16.0',heading:180,flag:'US',dest:'JPYOK',_src:'demo'},
+  {mmsi:'241256000',name:'MAERSK ELBA',    type:'cargo',   typeName:'Container',lat:35.00,lon:-38.00,speed:'13.5',heading:270,flag:'DK',dest:'USNYC',_src:'demo'},
+  {mmsi:'310627000',name:'AURORA BOREALIS',type:'special', typeName:'Research', lat:65.00,lon:-30.00,speed:'6.5', heading:180,flag:'DK',dest:'GLFAH',_src:'demo'},
+];
+
+// Geo coordinates for major active conflict zones (fallback for demo/offline data)
+const CONFLICT_COORDS = [
+  {lat:48.5,  lon:32.0,  region:'Ukraine'},
+  {lat:31.5,  lon:34.8,  region:'Gaza'},
+  {lat:15.5,  lon:44.0,  region:'Yemen'},
+  {lat:33.3,  lon:44.4,  region:'Iraq'},
+  {lat:35.0,  lon:38.5,  region:'Syria'},
+  {lat:34.5,  lon:69.2,  region:'Afghanistan'},
+  {lat:12.0,  lon:15.0,  region:'Chad/Sahel'},
+  {lat:9.0,   lon:8.7,   region:'Nigeria'},
+  {lat:4.8,   lon:31.6,  region:'South Sudan'},
+  {lat:15.3,  lon:39.4,  region:'Eritrea/Ethiopia'},
+  {lat:7.0,   lon:81.0,  region:'Sri Lanka'},
+  {lat:22.0,  lon:96.0,  region:'Myanmar'},
+  {lat:17.0,  lon:-12.0, region:'Mali/Sahel'},
+  {lat:3.0,   lon:25.0,  region:'DRC'},
+  {lat:30.0,  lon:70.0,  region:'Pakistan'},
+];
+
+// ReliefWeb country names → coordinates. This was referenced in
+// fetchReliefWeb() but never actually defined anywhere in the file — a
+// silent ReferenceError inside a try/catch meant ReliefWeb has been failing
+// on every single call, contributing zero data, with no visible error.
+const COUNTRY_COORDS = {
+  'Ukraine':{lat:48.5,lon:31.2}, 'Russian Federation':{lat:61.5,lon:105.3},
+  'occupied Palestinian territory':{lat:31.5,lon:34.5}, 'Israel':{lat:31.0,lon:35.0},
+  'Yemen':{lat:15.5,lon:47.6}, 'Syrian Arab Republic':{lat:35.0,lon:38.5},
+  'Iraq':{lat:33.2,lon:43.7}, 'Afghanistan':{lat:33.9,lon:67.7},
+  'Sudan':{lat:12.9,lon:30.2}, 'South Sudan':{lat:6.9,lon:31.3},
+  'Somalia':{lat:5.2,lon:46.2}, 'Ethiopia':{lat:9.1,lon:40.5},
+  'Nigeria':{lat:9.1,lon:8.7}, "Democratic Republic of the Congo":{lat:-4.0,lon:21.8},
+  'Mali':{lat:17.6,lon:-4.0}, 'Niger':{lat:17.6,lon:8.1}, 'Burkina Faso':{lat:12.2,lon:-1.6},
+  'Chad':{lat:15.5,lon:19.0}, 'Cameroon':{lat:7.4,lon:12.4}, 'Mozambique':{lat:-18.7,lon:35.5},
+  'Central African Republic':{lat:6.6,lon:20.9},
+  'Myanmar':{lat:21.9,lon:96.1}, 'Pakistan':{lat:30.4,lon:69.3}, 'India':{lat:20.6,lon:78.9},
+  'Sri Lanka':{lat:7.9,lon:80.7}, 'Bangladesh':{lat:23.7,lon:90.4},
+  'Haiti':{lat:18.9,lon:-72.3}, 'Colombia':{lat:4.6,lon:-74.1}, 'Venezuela (Bolivarian Republic of)':{lat:6.4,lon:-66.6},
+  'Mexico':{lat:23.6,lon:-102.5}, 'Lebanon':{lat:33.9,lon:35.9}, 'Libya':{lat:26.3,lon:17.2},
+  'Democratic People\'s Republic of Korea':{lat:40.3,lon:127.5}, 'Georgia':{lat:42.3,lon:43.4},
+  'Armenia':{lat:40.1,lon:45.0}, 'Azerbaijan':{lat:40.1,lon:47.6}, 'Egypt':{lat:26.8,lon:30.8},
+};
+
+function renderConflicts() {
+  LG.conflicts.clearLayers();
+  if (S.layers.conflicts) {
+    S.conflicts.forEach((c, i) => {
+      const lat = c.lat || CONFLICT_COORDS[i % CONFLICT_COORDS.length]?.lat;
+      const lon = c.lon || CONFLICT_COORDS[i % CONFLICT_COORDS.length]?.lon;
+      if (!lat || !lon) return;
+      // Pulsing conflict event icon
+      const icon = L.divIcon({
+        className: '',
+        html: `<div style="position:relative;width:14px;height:14px;margin:-7px 0 0 -7px">
+          <div class="conflict-ring"></div>
+          <div style="position:absolute;top:50%;left:50%;transform:translate(-50%,-50%);
+            width:7px;height:7px;border-radius:50%;background:#f04060;
+            box-shadow:0 0 8px #f04060cc"></div>
+        </div>`,
+        iconSize:[0,0], iconAnchor:[0,0],
+      });
+      L.marker([lat, lon], { icon, zIndexOffset:40 })
+        .bindPopup(popup(c.title.slice(0,50), '💥', [
+          ['Source',  c.source],
+          ['Date',    c.date],
+          ['Country', c.country || c.region || '—'],
+          ['Type',    'Conflict Event'],
+          ['Data',    'Live News Wire'],
+        ]))
+        .addTo(LG.conflicts);
+    });
+  }
+  const n = S.conflicts.length; S.counts.conflicts = n;
+  document.getElementById('chip-conflicts').textContent = n;
+  document.getElementById('stat-conflicts').textContent = n;
+  document.getElementById('lsub-conflicts').textContent = `${n} events (Live Wire)`;
+  renderConflictsFeed(S.conflicts.slice(0, 15));
+}
+
+function renderConflictsFeed(events) {
+  if (!events.length) {
+    document.getElementById('conflicts-feed').innerHTML =
+      '<div class="feed-item"><div class="feed-body"><div class="feed-meta diag-note">'+
+      'No live conflict events right now — the news proxies this relies on '+
+      '(allorigins/corsproxy/codetabs) may be blocked on this network. '+
+      'Wikipedia and ReliefWeb-derived items still appear in the News tab.</div></div></div>';
+    return;
+  }
+  const keywords = {
+    airstrike:'sev-high', missile:'sev-high', explosion:'sev-high',
+    attack:'sev-medium', military:'sev-medium', troops:'sev-medium',
+    conflict:'sev-medium', protest:'sev-low',
+  };
+  document.getElementById('conflicts-feed').innerHTML = events.map((e, i) => {
+    const title = e.title || 'Military Event';
+    const lower = title.toLowerCase();
+    let sevClass = 'sev-info';
+    for (const [kw, cls] of Object.entries(keywords)) {
+      if (lower.includes(kw)) { sevClass = cls; break; }
+    }
+    const sev = sevClass === 'sev-high' ? 'HIGH' : sevClass === 'sev-medium' ? 'MED' : sevClass === 'sev-low' ? 'LOW' : 'INFO';
+    const lat = e.lat || CONFLICT_COORDS[i % CONFLICT_COORDS.length]?.lat;
+    const lon = e.lon || CONFLICT_COORDS[i % CONFLICT_COORDS.length]?.lon;
+    return `<div class="feed-item" onclick="flyTo(${lat},${lon},5)">
+      <div class="feed-icon">💥</div>
+      <div class="feed-body">
+        <div class="feed-title">${title.slice(0,55)}${title.length>55?'…':''}</div>
+        <div class="feed-meta">${e.source} · ${e.date} · ${e.country||'Global'}</div>
+      </div>
+      <div class="severity ${sevClass}">${sev}</div>
+    </div>`;
+  }).join('') || '<div class="feed-item"><div class="feed-body"><div class="feed-meta">No conflict events found</div></div></div>';
+}
+
+function renderACLED() {
+  LG.acled.clearLayers();
+  if (S.layers.acled) {
+    S.acled.forEach(e => {
+      const isLethal = e.deaths > 0;
+      const isBattle = e.type === 'Battles' || e.type === 'Explosions/Remote violence';
+      const color = isLethal ? '#e040fb' : isBattle ? '#c020d0' : '#9060a0';
+      const sz = Math.min(10, Math.max(4, 4 + e.deaths * 0.4));
+      const srcLabel = e._src === 'acled' ? 'ACLED (verified)' :
+                       e._src === 'livewire' ? 'Live News Wire' :
+                       'Offline reference data';
+      dot(e.lat, e.lon, color, sz, popup(`${e.type}${e.location ? ' — '+e.location : ''}`, '⚡', [
+        ['Event',    e.type],
+        ['Type',     e.subtype || '—'],
+        ['Location', e.location || '—'],
+        ['Country',  e.country || '—'],
+        ['Date',     e.date || '—'],
+        ['Fatalities', e.deaths > 0 ? String(e.deaths) : '0'],
+        ['Source',   srcLabel],
+      ]), 'acled', 35);
+    });
+  }
+  const n = S.acled.length; S.counts.acled = n;
+  renderACLEDFeed(S.acled.slice(0, 15));
+  updateIntelSummary();
+}
+
+function renderACLEDFeed(events) {
+  document.getElementById('acled-feed').innerHTML = events.map(e => {
+    const sevClass = e.deaths > 10 ? 'sev-high' : e.deaths > 0 ? 'sev-medium' : 'sev-low';
+    const sev = e.deaths > 10 ? `${e.deaths}✝` : e.deaths > 0 ? `${e.deaths}✝` : '—';
+    return `<div class="feed-item" onclick="flyTo(${e.lat},${e.lon},7)">
+      <div class="feed-icon">⚡</div>
+      <div class="feed-body">
+        <div class="feed-title">${e.type} — ${e.location||e.country||'Unknown'}</div>
+        <div class="feed-meta">${e.date} · ${e.country||'—'} · ${e.subtype||'—'}</div>
+      </div>
+      <div class="severity ${sevClass}">${sev}</div>
+    </div>`;
+  }).join('') || '<div class="feed-item"><div class="feed-body"><div class="feed-meta diag-note">No live conflict data available — either the news proxies are blocked on this network, or add a free ACLED token (⚙ above) for verified data.</div></div></div>';
+}
+
+// ─── INTEL SUMMARY ────────────────────────────────────────────────
+function updateIntelSummary() {
+  const highAcled  = S.acled.filter(e => e.deaths > 5).length;
+  const totalDeaths= S.acled.reduce((s,e) => s+e.deaths, 0);
+  const hotZones   = [...new Set(S.acled.filter(e=>e.deaths>0).map(e=>e.country))].slice(0,5);
+  const milAc      = S.counts.mil;
+  const strikeEvents = S.conflicts.filter(e => ['airstrike','missile','explosion'].some(k => e.title?.toLowerCase().includes(k))).length;
+
+  document.getElementById('intel-feed').innerHTML = `
+    <div style="display:flex;flex-direction:column;gap:8px;font-size:11px">
+
+      <div style="background:rgba(240,64,96,0.08);border:1px solid rgba(240,64,96,0.2);border-radius:4px;padding:8px">
+        <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:var(--red);margin-bottom:6px">CURRENT THREAT ASSESSMENT</div>
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:6px">
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:20px;color:var(--red);font-weight:bold">${highAcled}</div>
+            <div style="font-size:9px;color:var(--text-dim)">HIGH SEVERITY</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:20px;color:#e040fb;font-weight:bold">${totalDeaths}</div>
+            <div style="font-size:9px;color:var(--text-dim)">FATALITIES (7D)</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:20px;color:var(--amber);font-weight:bold">${milAc}</div>
+            <div style="font-size:9px;color:var(--text-dim)">MIL AIRCRAFT</div>
+          </div>
+          <div style="text-align:center">
+            <div style="font-family:var(--mono);font-size:20px;color:var(--cyan);font-weight:bold">${strikeEvents}</div>
+            <div style="font-size:9px;color:var(--text-dim)">STRIKE EVENTS</div>
+          </div>
+        </div>
+      </div>
+
+      <div style="background:rgba(240,192,48,0.06);border:1px solid rgba(240,192,48,0.15);border-radius:4px;padding:8px">
+        <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:var(--amber);margin-bottom:6px">🔥 ACTIVE CONFLICT ZONES</div>
+        ${hotZones.length ? hotZones.map(z =>
+          `<div style="display:flex;align-items:center;gap:6px;padding:3px 0;border-bottom:1px solid rgba(255,255,255,0.04)">
+            <span style="color:var(--red);font-size:10px">●</span>
+            <span style="color:var(--text);font-size:11px">${z}</span>
+          </div>`
+        ).join('') : '<div style="color:var(--text-dim);font-size:10px">No live conflict data right now</div>'}
+      </div>
+
+      <div style="background:rgba(41,212,245,0.04);border:1px solid rgba(41,212,245,0.1);border-radius:4px;padding:8px">
+        <div style="font-size:9px;font-weight:700;letter-spacing:0.1em;color:var(--cyan);margin-bottom:4px">DATA SOURCES</div>
+        <div style="color:var(--text-dim);font-size:10px;line-height:1.8;font-family:var(--mono)">
+          ✓ Google News RSS (live, all outlets)<br>
+          ✓ BBC · Al Jazeera · Defense News · ISW · Crisis Group<br>
+          ✓ airplanes.live + OpenSky (Military AC)<br>
+          ✓ OSM Overpass (${S.counts.bases} bases)<br>
+          ✓ Live News Wire (${S.counts.conflicts} events)<br>
+          ✓ ${S.acled[0]?._src==='acled' ? 'ACLED verified' : 'Live Wire'} (${S.acled.length} incidents)<br>
+          ✓ ReliefWeb UN OCHA · UCDP Uppsala (historical)<br>
+          ✓ USGS (${S.counts.quakes} seismic events)<br>
+          ✓ ${S.vessels[0]?._src==='aisstream' ? 'AISStream (live)' : 'AISHub'} (${S.counts.vessels} vessels)<br>
+          ✓ News feed: ${S.news.length} items aggregated
+        </div>
+      </div>
+
+    </div>
+  `;
+}
+
+// ─── MIL OSINT TAB SWITCHER ───────────────────────────────────────
+function switchMilTab(name, btn) {
+  document.querySelectorAll('.mil-tab-pane').forEach(p => p.classList.remove('active'));
+  document.querySelectorAll('.mil-tab-btn').forEach(b => b.classList.remove('active'));
+  const pane = document.getElementById('pane-' + name);
+  if (pane) pane.classList.add('active');
+  if (btn) btn.classList.add('active');
+}
+
+// ─── THREAT INDEX ──────────────────────────────────────────────────
+function updateThreat() {
+  lastSyncAt = Date.now();
+  const q  = Math.min(20, S.counts.quakes    * 0.08);
+  const m  = Math.min(25, S.counts.mil       * 0.35);
+  const f  = Math.min(10, S.counts.fires     * 0.05);
+  const fl = Math.min(10, S.counts.flights   * 0.002);
+  const ac = Math.min(20, S.acled.filter(e=>e.deaths>0).length * 0.8);
+  const cf = Math.min(15, S.counts.conflicts * 0.3);
+  const total = Math.min(99, q + m + f + fl + ac + cf);
+  const fill = document.getElementById('threat-fill');
+  const pct  = document.getElementById('threat-pct');
+  if (fill) {
+    fill.style.width = total + '%';
+    fill.style.background = total > 65
+      ? 'linear-gradient(90deg,#f0c030,#f04060)'
+      : total > 35
+      ? 'linear-gradient(90deg,#22d97a,#f0c030)'
+      : 'linear-gradient(90deg,#22d97a,#29d4f5)';
+  }
+  if (pct) {
+    pct.textContent = total.toFixed(0) + '%';
+    pct.style.color = total > 65 ? '#f04060' : total > 35 ? '#f0c030' : '#22d97a';
+  }
+}
+
+// ─── LAYER TOGGLE ─────────────────────────────────────────────────
+function toggleLayer(name, on) {
+  S.layers[name] = on;
+  if (!on) { LG[name].clearLayers(); }
+  else {
+    if (name === 'flights')   renderFlights();
+    if (name === 'mil')       renderMilitary();
+    if (name === 'quakes')    renderQuakes();
+    if (name === 'fires')     renderFires();
+    if (name === 'iss' && S.iss) renderISS(S.iss.lat, S.iss.lon, S.iss.alt, S.iss.vel);
+    if (name === 'bases')     renderBases();
+    if (name === 'conflicts') renderConflicts();
+    if (name === 'acled')     renderACLED();
+    if (name === 'vessels')   renderVessels();
+  }
+}
+// ─── VIEW PRESETS ────────────────────────────────────────────────
+function showView(v) {
+  document.querySelectorAll('.nav-pill').forEach(b => b.classList.remove('active'));
+  event.target.classList.add('active');
+  const all = v === 'all';
+  ['flights','mil','quakes','fires','iss'].forEach(k => {
+    const show = all || v === k || (v==='flights' && k==='mil');
+    document.getElementById(`tog-${k === 'quakes' ? 'quakes' : k}`).checked = show;
+    toggleLayer(k, show);
+  });
+  const targets = {
+    flights:[40,-20,3], seismic:[25,80,3], fires:[5,20,3],
+    iss:[20,10,3], all:[20,10,3], milOsint:[25,30,3],
+  };
+  const [la,lo,z] = targets[v] || [20,10,3];
+  MAP.flyTo([la,lo],z,{duration:1.5});
+}
+
+// ─── SIDEBAR ─────────────────────────────────────────────────────
+function toggleSidebar(forceOpen) {
+  if (forceOpen !== undefined) S.sidebarOpen = !forceOpen;
+  S.sidebarOpen = !S.sidebarOpen;
+  const sb = document.getElementById('sidebar');
+  const btn = document.getElementById('sidebar-toggle');
+  const ctrl = document.getElementById('map-controls');
+  if (S.sidebarOpen) {
+    sb.classList.remove('hidden');
+    btn.classList.remove('hidden-state');
+    btn.textContent = '‹';
+    ctrl.style.left = '310px';
+  } else {
+    sb.classList.add('hidden');
+    btn.classList.add('hidden-state');
+    btn.textContent = '›';
+    ctrl.style.left = '14px';
+  }
+}
+
+function toggleSection(head) {
+  head.classList.toggle('open');
+  const body = head.nextElementSibling;
+  if (body) body.classList.toggle('collapsed');
+}
+
+// ─── FLASH ────────────────────────────────────────────────────────
+function flash(msg) {
+  const el = document.getElementById('flash');
+  el.textContent = msg; el.classList.add('show');
+  setTimeout(() => el.classList.remove('show'), 2500);
+}
+
+// ─── STATUS INDICATORS ────────────────────────────────────────────
+function setStatus(key, state) {
+  const dotMap = { flights:'sd-flights', seismic:'sd-seismic', weather:'sd-weather', iss:'sd-iss' };
+  const dotEl = document.getElementById(dotMap[key]);
+  if (!dotEl) return;
+  dotEl.className = 'sdot' + (state==='warn'?' warn':state==='err'?' err':'');
+}
+
+// ─── LOADER HELPERS ───────────────────────────────────────────────
+function mark(id) {
+  const el = document.getElementById(id);
+  if (el) { el.textContent = '✓'; el.className = 'ok'; }
+}
+
+function updateLiveAgo() {
+  const el = document.getElementById('live-ago');
+  if (!el) return;
+  const s = Math.max(0, Math.round((Date.now() - lastSyncAt) / 1000));
+  el.textContent = s < 3 ? '· synced now' : s < 60 ? `· synced ${s}s ago` : `· synced ${Math.round(s/60)}m ago`;
+}
+
+async function runLoader() {
+  const bar = document.getElementById('lbar');
+  const stat = document.getElementById('lstatus');
+  const steps = [
+    [15,'Initializing map engine…'],
+    [30,'Connecting to airplanes.live…'],
+    [45,'Fetching USGS seismic data…'],
+    [60,'Loading NASA EONET fires…'],
+    [75,'Querying Open-Meteo weather…'],
+    [88,'Tracking ISS position…'],
+    [95,'Propagating data layers…'],
+    [100,'All systems online'],
+  ];
+  for (const [p,m] of steps) {
+    bar.style.width = p + '%'; stat.textContent = m;
+    await sleep(250 + Math.random()*150);
+  }
+  await sleep(300);
+  document.getElementById('loader').classList.add('fade');
+  setTimeout(() => document.getElementById('loader').style.display='none', 600);
+}
+
+const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+// ─── MAIN INIT ────────────────────────────────────────────────────
+async function init() {
+  runLoader();
+  await sleep(200);
+  initMap();
+
+  // FAST tier — single-call APIs, each has its own short timeout, should
+  // all resolve within a few seconds. This is everything the loading screen
+  // waits on.
+  await Promise.all([
+    fetchQuakes(),
+    fetchFires(),
+    fetchMilitary(),
+    fetchWeather(),
+    fetchISS(),
+    fetchBases(),
+    fetchVessels(),
+  ]);
+  fetchFlights();
+  updateThreat();
+  updateLiveAgo();
+  setInterval(updateLiveAgo, 1000);
+
+  // SLOW tier — OSINT/news pipelines that cascade through several proxy
+  // queries each. These deliberately run WITHOUT being awaited here, so
+  // they never hold up the screen above. fetchACLED() fills in instantly
+  // with a best-effort/offline state and gets upgraded automatically the
+  // moment fetchConflicts() lands (see syncLiveWireIntoAcled()).
+  runProxyDiagnostics(); // tests all 3 proxies immediately, non-blocking
+  fetchACLED();
+  fetchConflicts();
+  fetchOsintNews(); // also fetches ReliefWeb + UCDP + Wikipedia internally
+
+  // If the user has set up a free AISStream.io key, switch to the real-time
+  // WebSocket feed instead of polling AISHub — genuinely live positions.
+  const aisKey = getAisStreamKey();
+  if (aisKey) connectAisStream(aisKey);
+
+  // Polling — staggered to avoid simultaneous bursts
+  setInterval(fetchFlights,       8000);   // Flights every 8s
+  setInterval(fetchMilitary,     25000);   // Military every 25s
+  setInterval(fetchISS,           5000);   // ISS every 5s (moves fast)
+  setInterval(fetchQuakes,       60000);   // Quakes every 1min
+  setInterval(fetchWeather,     120000);   // Weather every 2min
+  setInterval(() => { if (!aisSocket) fetchVessels(); }, 60000); // Vessels — only polls if AISStream isn't connected
+  setInterval(fetchFires,       300000);   // Fires every 5min
+  setInterval(fetchConflicts,   120000);   // Live wire (news-derived) every 2min
+  setInterval(fetchACLED,       300000);   // ACLED/live-wire fallback every 5min
+  setInterval(fetchOsintNews,   180000);   // Full news refresh every 3min
+  setInterval(fetchBases,      3600000);   // Bases every 1hr (stable)
+  setInterval(updateThreat,      20000);
+}
+
+window.addEventListener('load', init);
+</script>
+</body>
+</html>

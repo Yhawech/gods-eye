@@ -1,0 +1,26 @@
+digraph G {
+  graph [bgcolor="transparent", rankdir=LR, splines=ortho, nodesep=0.3, ranksep=0.5, pad=0.2];
+  node [shape=box, style="rounded,filled", fontname="Segoe UI", fontsize=15, color="#22D3EE", fillcolor="#141C2E", fontcolor="#E6EDF7", margin="0.25,0.14", penwidth=1.6];
+  edge [color="#22D3EE", arrowsize=0.9, penwidth=1.8];
+
+  git [label="Developer\nPush to GitHub"];
+  actions [label="GitHub Actions\nCI verification + build", color="#2DD4BF"];
+  s3 [label="Amazon S3\nDeployment artifact", color="#F59E0B", fillcolor="#1C1A10"];
+  cd [label="AWS CodeDeploy\nDeploy to ASG"];
+  asg [label="Auto Scaling Group\nPrivate EC2 instances"];
+  alb [label="Application\nLoad Balancer", color="#2DD4BF"];
+  live [label="Live over HTTPS\n(Route 53 + ACM)"];
+
+  git -> actions -> s3 -> cd -> asg -> alb -> live;
+
+  subgraph cluster_secrets {
+    label="Config & Secrets"; fontname="Segoe UI"; fontsize=13; fontcolor="#8B5CF6"; color="#8B5CF6"; style="rounded,filled"; fillcolor="#0F1626"; margin=14;
+    node [fontsize=12, color="#8B5CF6"];
+    gs [label="GitHub Secrets\nMONGODB_URI\nDEEPSEEK_API_KEY"];
+    vars [label="GitHub Variables\nAWS region, IAM role,\nS3 bucket, CodeDeploy app"];
+    oidc [label="OIDC IAM Role\n(no static keys)"];
+  }
+  gs -> actions [style=dashed, color="#8B5CF6"];
+  vars -> actions [style=dashed, color="#8B5CF6"];
+  oidc -> actions [style=dashed, color="#8B5CF6"];
+}

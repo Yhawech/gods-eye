@@ -1,0 +1,119 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>GOD'S EYE - Live Traffic</title>
+    <link rel="icon" href="data:," />
+    <link rel="stylesheet" href="https://unpkg.com/leaflet@1.9.4/dist/leaflet.css" />
+    <link rel="stylesheet" href="/traffic.css?v=20260708-traffic2" />
+    <script src="https://unpkg.com/leaflet@1.9.4/dist/leaflet.js" defer></script>
+  </head>
+  <body>
+    <div id="map"></div>
+    <div id="map-grid" aria-hidden="true"></div>
+    <div id="vignette" aria-hidden="true"></div>
+    <div id="scanlines" aria-hidden="true"></div>
+    <div class="bracket tl" aria-hidden="true"></div>
+    <div class="bracket tr" aria-hidden="true"></div>
+    <div class="bracket bl" aria-hidden="true"></div>
+    <div class="bracket br" aria-hidden="true"></div>
+
+    <header id="topbar">
+      <a id="logo" href="/">GOD'S <span>EYE</span></a>
+      <div class="page-title">LIVE TRAFFIC</div>
+
+      <div class="top-chips">
+        <div class="chip"><span class="dot cyan"></span><strong id="civilCount">0</strong><span>Civil</span></div>
+        <div class="chip"><span class="dot amber"></span><strong id="milCount">0</strong><span>Military</span></div>
+      </div>
+
+      <select id="regionSelect" title="Region">
+        <option value="global">Global</option>
+        <option value="north-america">North America</option>
+        <option value="europe">Europe</option>
+        <option value="middle-east">Middle East</option>
+        <option value="india">India</option>
+        <option value="indo-pacific">Indo-Pacific</option>
+      </select>
+
+      <a class="hud-button nav-link" href="/v2.html">Threat Intel</a>
+      <a class="hud-button nav-link" href="/globe.html">3D Globe</a>
+      <button class="hud-button" id="refreshBtn" type="button">Refresh</button>
+      <a class="hud-button nav-link" href="/">Back</a>
+      <div id="clock"><div id="clk-time">--:--:--</div><div id="clk-date">UTC</div></div>
+    </header>
+
+    <aside id="leftPanel" class="hud-panel">
+      <section class="section">
+        <div class="section-head">
+          <span class="section-title">Traffic Layers</span>
+          <span class="section-meta" id="syncStatus">Starting</span>
+        </div>
+        <div class="section-body">
+          <label class="layer-row">
+            <span class="layer-dot civil"></span>
+            <span><strong>Civil Aircraft</strong><small id="civilStatus">OpenSky Network</small></span>
+            <input id="civilToggle" type="checkbox" checked />
+          </label>
+          <label class="layer-row">
+            <span class="layer-dot military"></span>
+            <span><strong>Military Aviation</strong><small id="milStatus">Airplanes.live</small></span>
+            <input id="milToggle" type="checkbox" checked />
+          </label>
+        </div>
+      </section>
+
+      <section class="section feed-section">
+        <div class="section-head">
+          <span class="section-title">Live Contacts</span>
+          <span class="section-meta" id="contactCount">0 shown</span>
+        </div>
+        <div id="contactList" class="contact-list"></div>
+      </section>
+    </aside>
+
+    <aside id="rightPanel" class="hud-panel">
+      <section class="detail-top">
+        <div>
+          <span class="section-title">Traffic Picture</span>
+          <h1 id="trafficTitle">No contacts loaded</h1>
+        </div>
+        <div class="status-pill" id="liveStatus"><span></span> LIVE</div>
+      </section>
+
+      <div class="stat-grid">
+        <button class="stat-card" id="fitBtn" type="button"><strong id="mappedCount">0</strong><span>Mapped</span></button>
+        <button class="stat-card" id="styleBtn" type="button"><strong id="styleName">Dark</strong><span>Map</span></button>
+        <div class="stat-card"><strong id="sourceCount">0/2</strong><span>Sources</span></div>
+        <div class="stat-card"><strong id="lastSync">Not synced</strong><span>Last Sync</span></div>
+      </div>
+
+      <section class="detail-card">
+        <div class="detail-card-title">Selected Contact</div>
+        <div id="selectedContact" class="empty-state">Select an aircraft or feed item.</div>
+      </section>
+
+      <section class="detail-card">
+        <div class="detail-card-title">Source Health</div>
+        <div id="sourceHealth" class="source-health"></div>
+      </section>
+    </aside>
+
+    <div id="map-controls">
+      <button class="ctrl-btn" id="zoomInBtn" type="button">+</button>
+      <button class="ctrl-btn" id="zoomOutBtn" type="button">-</button>
+      <button class="ctrl-btn wide" id="fitMapBtn" type="button">FIT</button>
+    </div>
+
+    <div id="legend">
+      <span><i class="civil"></i>Civil aircraft</span>
+      <span><i class="military"></i>Military aviation</span>
+    </div>
+
+    <div id="coordBar">Hover the map for coordinates</div>
+    <div id="toast" role="status" aria-live="polite"></div>
+
+    <script src="/traffic.js?v=20260708-traffic-safe1" defer></script>
+  </body>
+</html>

@@ -1,0 +1,320 @@
+name: GOD EYE AWS ASG CodeDeploy
+
+on:
+  push:
+    branches:
+      - main
+      - master
+  pull_request:
+    branches:
+      - main
+      - master
+  workflow_dispatch:
+    inputs:
+      deploy_to_aws:
+        description: Deploy to AWS Auto Scaling Group through CodeDeploy
+        required: true
+        type: boolean
+        default: false
+
+permissions:
+  contents: read
+  id-token: write
+
+concurrency:
+  group: gods-eye-codedeploy-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  verify:
+    name: Verify App
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - name: Install dependencies and verify app
+        run: |
+          set -euo pipefail
+          python -m pip install --upgrade pip
+          python -m pip install -r requirements.txt
+          python -m py_compile backend/main.py
+          node --check public/v2.js
+          test -f appspec.yml
+          test -x scripts/install_dependencies.sh || chmod +x scripts/*.sh
+          python - <<'PY'
+          from pathlib import Path
+          import backend.main as app
+
+          sample_report = {
+              "id": 0,
+              "title": "PDF Smoke Test - OSINT Report",
+              "focus": "workflow verification",
+              "days": 7,
+              "model": "ci-smoke",
+              "aiProvider": "local",
+              "summary": "Workflow smoke test for styled PDF report export.",
+              "createdAt": "2026-07-24T00:00:00Z",
+              "report": (
+                  "# GOD EYE v2 OSINT Incident Report\n\n"
+                  "## Executive Summary\n"
+                  "- PDF renderer dependency is installed.\n"
+                  "- Headings, bullets, metadata, and source highlights can render.\n\n"
+                  "## Confidence\n"
+                  "- High for workflow dependency validation."
+              ),
+              "snapshot": {
+                  "windowDays": 7,
+                  "hotspots": [
+                      {"name": "Global", "count": 3, "maxSeverity": 82, "categories": ["geopolitical", "military"]}
+                  ],
+                  "priorityEvents": [
+                      {
+                          "title": "Sample OSINT source item for PDF validation",
+                          "category": "geopolitical",
+                          "severityScore": 82,
+                          "source": "CI",
+                          "area": "Global",
+                          "time": "2026-07-24T00:00:00Z",
+                          "url": "https://example.com/osint-source",
+                      }
+                  ],
+              },
+          }
+          pdf = app.render_analyst_report_pdf(sample_report)
+          assert pdf.startswith(b"%PDF"), "PDF export did not produce a PDF file"
+          Path("dist").mkdir(exist_ok=True)
+          Path("dist/pdf-smoke-test.pdf").write_bytes(pdf)
+          PY
+
+      - name: Python 3.10 compatibility check (matches EC2 Ubuntu 22.04 runtime)
+        uses: actions/setup-python@v5
+        with:
+          python-version: "3.10"
+
+      - name: Compile backend on Python 3.10
+        run: python -m compileall -q backend
+
+  deploy:
+    name: Deploy to ASG with CodeDeploy
+    needs: verify
+    runs-on: ubuntu-latest
+    if: ${{ github.event_name == 'workflow_dispatch' && inputs.deploy_to_aws }}
+
+    env:
+      AWS_REGION: ${{ vars.AWS_REGION || 'ap-south-1' }}
+      AWS_ROLE_TO_ASSUME: ${{ vars.AWS_ROLE_TO_ASSUME }}
+      S3_DEPLOY_BUCKET: ${{ vars.S3_DEPLOY_BUCKET }}
+      CODEDEPLOY_APP_NAME: ${{ vars.CODEDEPLOY_APP_NAME || 'gods-eye-app' }}
+      CODEDEPLOY_DEPLOYMENT_GROUP: ${{ vars.CODEDEPLOY_DEPLOYMENT_GROUP || 'gods-eye-dg' }}
+      APP_SECRET_ID: ${{ vars.APP_SECRET_ID || '/gods-eye/prod/app-env' }}
+      APP_DIR: ${{ vars.EC2_APP_DIR || '/opt/gods-eye' }}
+      APP_HOST: ${{ vars.EC2_APP_HOST || '0.0.0.0' }}
+      APP_PORT: ${{ vars.EC2_APP_PORT || '4173' }}
+      SERVICE_NAME: ${{ vars.EC2_SERVICE_NAME || 'gods-eye' }}
+      RUN_USER: ${{ vars.EC2_RUN_USER || 'ubuntu' }}
+      MONGODB_DB: ${{ vars.MONGODB_DB || 'gods_eye' }}
+      MONGODB_TIMEOUT_MS: ${{ vars.MONGODB_TIMEOUT_MS || '5000' }}
+      DEEPSEEK_MODEL: ${{ vars.DEEPSEEK_MODEL || 'deepseek-v4-flash' }}
+      DEEPSEEK_BASE_URL: ${{ vars.DEEPSEEK_BASE_URL || 'https://api.deepseek.com' }}
+      DEEPSEEK_THINKING: ${{ vars.DEEPSEEK_THINKING || 'disabled' }}
+      DEEPSEEK_REASONING_EFFORT: ${{ vars.DEEPSEEK_REASONING_EFFORT || 'high' }}
+      GLOBE_ENABLED: ${{ vars.GLOBE_ENABLED || 'false' }}
+      GLOBE_REPO_URL: ${{ vars.GLOBE_REPO_URL || 'https://github.com/bilawalsidhu/gods-eye-view.git' }}
+      GLOBE_INSTALL_DIR: ${{ vars.GLOBE_INSTALL_DIR || '/opt/gods-eye/globe' }}
+      GLOBE_APP_HOST: ${{ vars.GLOBE_APP_HOST || '0.0.0.0' }}
+      GLOBE_APP_PORT: ${{ vars.GLOBE_APP_PORT || '4174' }}
+      GLOBE_VIEW_URL: ${{ vars.GLOBE_VIEW_URL || 'http://127.0.0.1:4174' }}
+      GLOBE_OSINT_ENABLED: ${{ vars.GLOBE_OSINT_ENABLED || 'true' }}
+      GLOBE_OSINT_REFRESH_MS: ${{ vars.GLOBE_OSINT_REFRESH_MS || '300000' }}
+      GLOBE_OSINT_MAX_ITEMS: ${{ vars.GLOBE_OSINT_MAX_ITEMS || '80' }}
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Validate AWS deployment configuration
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+          AISSTREAM_API_KEY: ${{ secrets.AISSTREAM_API_KEY }}
+        run: |
+          set -euo pipefail
+          missing=0
+          for name in AWS_ROLE_TO_ASSUME S3_DEPLOY_BUCKET CODEDEPLOY_APP_NAME CODEDEPLOY_DEPLOYMENT_GROUP APP_SECRET_ID MONGODB_URI DEEPSEEK_API_KEY; do
+            if [ -z "${!name}" ]; then
+              echo "::error::Missing required GitHub Actions variable or secret: $name"
+              missing=1
+            fi
+          done
+          case "$MONGODB_URI" in
+            mongodb://*|mongodb+srv://*) ;;
+            *)
+              echo "::error::MONGODB_URI must start with mongodb:// or mongodb+srv://."
+              missing=1
+              ;;
+          esac
+          case "$DEEPSEEK_BASE_URL" in
+            https://*) ;;
+            *)
+              echo "::error::DEEPSEEK_BASE_URL should be an HTTPS URL."
+              missing=1
+              ;;
+          esac
+          GLOBE_ENABLED_NORMALIZED="$(printf '%s' "$GLOBE_ENABLED" | tr '[:upper:]' '[:lower:]')"
+          if [ "$GLOBE_ENABLED_NORMALIZED" = "true" ] && [ -z "$GOOGLE_MAPS_API_KEY" ]; then
+            echo "::error::GLOBE_ENABLED=true requires the GOOGLE_MAPS_API_KEY GitHub secret."
+            missing=1
+          fi
+          if [ "$missing" -ne 0 ]; then
+            exit 1
+          fi
+
+      - name: Configure AWS credentials
+        uses: aws-actions/configure-aws-credentials@v6
+        with:
+          aws-region: ${{ env.AWS_REGION }}
+          role-to-assume: ${{ env.AWS_ROLE_TO_ASSUME }}
+
+      - name: Upsert application secret in AWS Secrets Manager
+        env:
+          MONGODB_URI: ${{ secrets.MONGODB_URI }}
+          DEEPSEEK_API_KEY: ${{ secrets.DEEPSEEK_API_KEY }}
+          GOOGLE_MAPS_API_KEY: ${{ secrets.GOOGLE_MAPS_API_KEY }}
+          ABUSEIPDB_API_KEY: ${{ secrets.ABUSEIPDB_API_KEY }}
+          VIRUSTOTAL_API_KEY: ${{ secrets.VIRUSTOTAL_API_KEY }}
+          OTX_API_KEY: ${{ secrets.OTX_API_KEY }}
+          FIRMS_MAP_KEY: ${{ secrets.FIRMS_MAP_KEY }}
+          AISSTREAM_API_KEY: ${{ secrets.AISSTREAM_API_KEY }}
+        run: |
+          set -euo pipefail
+          python - <<'PY'
+          import json
+          import os
+          from pathlib import Path
+
+          payload = {
+              "MONGODB_URI": os.environ["MONGODB_URI"],
+              "MONGODB_DB": os.environ["MONGODB_DB"],
+              "MONGODB_TIMEOUT_MS": os.environ["MONGODB_TIMEOUT_MS"],
+              "DEEPSEEK_API_KEY": os.environ["DEEPSEEK_API_KEY"],
+              "DEEPSEEK_MODEL": os.environ["DEEPSEEK_MODEL"],
+              "DEEPSEEK_BASE_URL": os.environ["DEEPSEEK_BASE_URL"],
+              "DEEPSEEK_THINKING": os.environ["DEEPSEEK_THINKING"],
+              "DEEPSEEK_REASONING_EFFORT": os.environ["DEEPSEEK_REASONING_EFFORT"],
+              "GOOGLE_MAPS_API_KEY": os.environ.get("GOOGLE_MAPS_API_KEY", ""),
+              "GLOBE_ENABLED": os.environ.get("GLOBE_ENABLED", "false"),
+              "GLOBE_REPO_URL": os.environ.get("GLOBE_REPO_URL", "https://github.com/bilawalsidhu/gods-eye-view.git"),
+              "GLOBE_INSTALL_DIR": os.environ.get("GLOBE_INSTALL_DIR", "/opt/gods-eye/globe"),
+              "GLOBE_APP_HOST": os.environ.get("GLOBE_APP_HOST", "0.0.0.0"),
+              "GLOBE_APP_PORT": os.environ.get("GLOBE_APP_PORT", "4174"),
+              "GLOBE_VIEW_URL": os.environ.get("GLOBE_VIEW_URL", ""),
+              "GLOBE_OSINT_ENABLED": os.environ.get("GLOBE_OSINT_ENABLED", "true"),
+              "GLOBE_OSINT_REFRESH_MS": os.environ.get("GLOBE_OSINT_REFRESH_MS", "300000"),
+              "GLOBE_OSINT_MAX_ITEMS": os.environ.get("GLOBE_OSINT_MAX_ITEMS", "80"),
+              "ABUSEIPDB_API_KEY": os.environ.get("ABUSEIPDB_API_KEY", ""),
+              "VIRUSTOTAL_API_KEY": os.environ.get("VIRUSTOTAL_API_KEY", ""),
+              "OTX_API_KEY": os.environ.get("OTX_API_KEY", ""),
+              "FIRMS_MAP_KEY": os.environ.get("FIRMS_MAP_KEY", ""),
+              "AISSTREAM_API_KEY": os.environ.get("AISSTREAM_API_KEY", ""),
+          }
+          Path("dist").mkdir(exist_ok=True)
+          Path("dist/app-secret.json").write_text(json.dumps(payload), encoding="utf-8")
+          PY
+
+          if aws secretsmanager describe-secret --secret-id "$APP_SECRET_ID" >/dev/null 2>&1; then
+            aws secretsmanager put-secret-value \
+              --secret-id "$APP_SECRET_ID" \
+              --secret-string file://dist/app-secret.json >/dev/null
+          else
+            aws secretsmanager create-secret \
+              --name "$APP_SECRET_ID" \
+              --description "GOD EYE production application environment" \
+              --secret-string file://dist/app-secret.json >/dev/null
+          fi
+          rm -f dist/app-secret.json
+
+      - name: Build CodeDeploy revision
+        run: |
+          set -euo pipefail
+          rm -rf dist/codedeploy
+          mkdir -p dist/codedeploy/deploy-config
+
+          cp appspec.yml dist/codedeploy/
+          cp -R backend public scripts requirements.txt package.json README.md dist/codedeploy/
+
+          cat > dist/codedeploy/deploy-config/gods-eye.env <<EOF
+          AWS_REGION=${AWS_REGION}
+          APP_SECRET_ID=${APP_SECRET_ID}
+          APP_DIR=${APP_DIR}
+          APP_HOST=${APP_HOST}
+          APP_PORT=${APP_PORT}
+          SERVICE_NAME=${SERVICE_NAME}
+          RUN_USER=${RUN_USER}
+          EOF
+
+          chmod +x dist/codedeploy/scripts/*.sh
+
+          python - <<'PY'
+          from pathlib import Path
+          from zipfile import ZipFile, ZIP_DEFLATED
+
+          root = Path("dist/codedeploy")
+          out = Path("dist/gods-eye-codedeploy.zip")
+          with ZipFile(out, "w", ZIP_DEFLATED) as archive:
+              for path in root.rglob("*"):
+                  if path.is_file():
+                      archive.write(path, path.relative_to(root).as_posix())
+          print(out)
+          PY
+
+      - name: Upload revision to S3
+        id: upload
+        run: |
+          set -euo pipefail
+          KEY="gods-eye/${GITHUB_SHA}/gods-eye-codedeploy.zip"
+          aws s3 cp dist/gods-eye-codedeploy.zip "s3://$S3_DEPLOY_BUCKET/$KEY"
+          echo "s3_key=$KEY" >> "$GITHUB_OUTPUT"
+
+      - name: Register CodeDeploy revision
+        run: |
+          set -euo pipefail
+          aws deploy register-application-revision \
+            --application-name "$CODEDEPLOY_APP_NAME" \
+            --description "GOD EYE ${GITHUB_SHA}" \
+            --s3-location bucket="$S3_DEPLOY_BUCKET",key="${{ steps.upload.outputs.s3_key }}",bundleType=zip
+
+      - name: Create CodeDeploy deployment
+        id: deploy
+        run: |
+          set -euo pipefail
+          DEPLOYMENT_ID="$(aws deploy create-deployment \
+            --application-name "$CODEDEPLOY_APP_NAME" \
+            --deployment-group-name "$CODEDEPLOY_DEPLOYMENT_GROUP" \
+            --description "GOD EYE ${GITHUB_SHA}" \
+            --s3-location bucket="$S3_DEPLOY_BUCKET",key="${{ steps.upload.outputs.s3_key }}",bundleType=zip \
+            --query deploymentId \
+            --output text)"
+          echo "deployment_id=$DEPLOYMENT_ID" >> "$GITHUB_OUTPUT"
+          echo "Created deployment $DEPLOYMENT_ID"
+
+      - name: Wait for CodeDeploy deployment
+        run: |
+          set -euo pipefail
+          aws deploy wait deployment-successful --deployment-id "${{ steps.deploy.outputs.deployment_id }}"
+          aws deploy get-deployment --deployment-id "${{ steps.deploy.outputs.deployment_id }}" \
+            --query 'deploymentInfo.[status,completeTime]' \
+            --output table
